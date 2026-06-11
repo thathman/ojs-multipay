@@ -1,0 +1,18 @@
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Build / packaging artifacts
+*.tar.gz
+*.zip
+
+# Local-only files
+/cache/
+/.idea/
+/.vscode/
+
+# Never commit live gateway credentials
+*.local.php
+.env

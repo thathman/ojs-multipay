@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE upgrade SYSTEM "../../../lib/pkp/dtd/upgrade.dtd">
+<upgrade>
+    <install>
+        <code function="addPluginVersions" />
+    </install>
+    <upgrade>
+        <code function="addPluginVersions" />
+    </upgrade>
+</upgrade>
+

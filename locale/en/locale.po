@@ -1,0 +1,174 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: OJS MultiPay Plugin\n"
+"Report-Msgid-Bugs-To: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "plugins.paymethod.multipay.displayName"
+msgstr "Multi-Gateway Payment"
+
+msgid "plugins.paymethod.multipay.description"
+msgstr "Routes payments across multiple installed OJS gateways with currency-aware checkout."
+
+msgid "plugins.paymethod.multipay.settings.testMode"
+msgstr "Test Mode"
+
+msgid "plugins.paymethod.multipay.settings.allowedCurrencies"
+msgstr "Allowed Currencies"
+
+msgid "plugins.paymethod.multipay.settings.allowedCurrencies.description"
+msgstr "Enter comma-separated currency codes (e.g., USD, NGN, GBP)."
+
+msgid "plugins.paymethod.multipay.settings.enabledGateways"
+msgstr "Enabled Gateways"
+
+msgid "plugins.paymethod.multipay.settings.pluginMode"
+msgstr "Payment Plugin Mode"
+
+msgid "plugins.paymethod.multipay.settings.pluginMode.value"
+msgstr "MultiPay is active as the journal payment orchestrator."
+
+msgid "plugins.paymethod.multipay.settings.gatewayTabs"
+msgstr "Gateway Tabs"
+
+msgid "plugins.paymethod.multipay.settings.gatewayTabs.description"
+msgstr "Use this tab selector to view each gateway context while managing one unified multi-gateway payment setup."
+
+msgid "plugins.paymethod.multipay.settings.gatewayMode.active"
+msgstr "currently active plugin mode"
+
+msgid "plugins.paymethod.multipay.settings.gatewayMode.available"
+msgstr "available through MultiPay orchestration"
+
+msgid "plugins.paymethod.multipay.settings.paystackPublicKey"
+msgstr "Paystack Public Key"
+
+msgid "plugins.paymethod.multipay.settings.paystackSecretKey"
+msgstr "Paystack Secret Key"
+
+msgid "plugins.paymethod.multipay.settings.flutterwavePublicKey"
+msgstr "Flutterwave Public Key"
+
+msgid "plugins.paymethod.multipay.settings.flutterwaveSecretKey"
+msgstr "Flutterwave Secret Key"
+
+msgid "plugins.paymethod.multipay.settings.flutterwaveWebhookSecret"
+msgstr "Flutterwave Webhook Secret"
+
+msgid "plugins.paymethod.multipay.settings.gatewayRoutingJson"
+msgstr "Currency Routing Map (JSON)"
+
+msgid "plugins.paymethod.multipay.settings.gatewayRoutingJson.description"
+msgstr "Map currency code to default gateway, e.g. {\"NGN\":\"paystack\",\"USD\":\"flutterwave\"}."
+
+msgid "plugins.paymethod.multipay.settings.fallbackGateway"
+msgstr "Fallback Gateway"
+
+msgid "plugins.paymethod.multipay.settings.logLevel"
+msgstr "Log Level"
+
+msgid "plugins.paymethod.multipay.settings.amountTolerance"
+msgstr "Amount Tolerance"
+
+msgid "plugins.paymethod.multipay.settings.callbackUrl"
+msgstr "Callback URL"
+
+msgid "plugins.paymethod.multipay.settings.paystackWebhookUrl"
+msgstr "Paystack Webhook URL"
+
+msgid "plugins.paymethod.multipay.settings.flutterwaveWebhookUrl"
+msgstr "Flutterwave Webhook URL"
+
+msgid "plugins.paymethod.multipay.paymentSelection"
+msgstr "Select Payment Method"
+
+msgid "plugins.paymethod.multipay.paymentDescription"
+msgstr "You are about to pay %s %s. Please select a payment gateway below."
+
+msgid "plugins.paymethod.multipay.chooseGateway"
+msgstr "Available Gateways"
+
+msgid "plugins.paymethod.multipay.gateway.paystack"
+msgstr "Paystack"
+
+msgid "plugins.paymethod.multipay.gateway.flutterwave"
+msgstr "Flutterwave"
+
+msgid "plugins.paymethod.multipay.error.noGateways"
+msgstr "No payment gateways are currently available for this currency."
+
+msgid "plugins.paymethod.multipay.error.initiationFailed"
+msgstr "Payment initiation failed."
+
+msgid "plugins.paymethod.multipay.error.verificationFailed"
+msgstr "Payment verification failed."
+
+msgid "plugins.paymethod.multipay.manage.transactions"
+msgstr "Transactions"
+
+msgid "plugins.paymethod.multipay.manage.webhooks"
+msgstr "Webhooks"
+
+msgid "plugins.paymethod.multipay.manage.routing"
+msgstr "Routing Preview"
+
+msgid "plugins.paymethod.multipay.manage.refunds"
+msgstr "Refunds"
+
+msgid "plugins.paymethod.multipay.manage.reconciliation"
+msgstr "Reconciliation"
+
+msgid "plugins.paymethod.multipay.manage.recurring"
+msgstr "Recurring"
+
+msgid "plugins.paymethod.multipay.manage.refundAction"
+msgstr "Refund"
+
+msgid "plugins.paymethod.multipay.manage.periodStart"
+msgstr "Period Start"
+
+msgid "plugins.paymethod.multipay.manage.periodEnd"
+msgstr "Period End"
+
+msgid "plugins.paymethod.multipay.manage.generateReport"
+msgstr "Generate Settlement Report"
+
+msgid "plugins.paymethod.multipay.manage.settlementReports"
+msgstr "Settlement Reports"
+
+msgid "plugins.paymethod.multipay.table.gateway"
+msgstr "Gateway"
+
+msgid "plugins.paymethod.multipay.table.reference"
+msgstr "Reference"
+
+msgid "plugins.paymethod.multipay.table.amountCurrency"
+msgstr "Amount/Currency"
+
+msgid "plugins.paymethod.multipay.table.status"
+msgstr "Status"
+
+msgid "plugins.paymethod.multipay.table.actions"
+msgstr "Actions"
+
+msgid "plugins.paymethod.multipay.table.event"
+msgstr "Event"
+
+msgid "plugins.paymethod.multipay.table.verified"
+msgstr "Verified"
+
+msgid "plugins.paymethod.multipay.table.timestamp"
+msgstr "Timestamp"
+
+msgid "plugins.paymethod.multipay.table.currency"
+msgstr "Currency"
+
+msgid "plugins.paymethod.multipay.table.count"
+msgstr "Count"
+
+msgid "plugins.paymethod.multipay.table.total"
+msgstr "Total"
