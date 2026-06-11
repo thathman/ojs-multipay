@@ -115,7 +115,7 @@ class PaypalAdapter implements GatewayAdapterInterface
         ];
     }
 
-    public function validateWebhook($payload, $headers)
+    public function validateWebhook(string $payload, array $headers): bool
     {
         return false;
     }

@@ -2,6 +2,18 @@
 
 Versioning: `A.B.C.D` — A new feature · B new sub-feature · C major fix · D minor fix.
 
+## 1.0.2.0 - 2026-06-11
+
+Major fix.
+
+### Fixed
+- **PayPal adapter fatal.** `PaypalAdapter::validateWebhook()` was declared
+  `($payload, $headers)` while `GatewayAdapterInterface` requires
+  `(string $payload, array $headers): bool`. PHP raised a fatal incompatibility
+  error whenever the PayPal adapter was loaded (i.e. any time a PayPal payment
+  was routed), since `getAdapter()` loads the interface and the adapter together.
+  Signature corrected. Caught by a live OJS-bootstrap integration test.
+
 ## 1.0.1.0 - 2026-06-11
 
 Production-hardening release (major fixes).
