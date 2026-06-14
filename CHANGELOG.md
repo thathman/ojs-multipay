@@ -2,6 +2,24 @@
 
 Versioning: `A.B.C.D` — A new feature · B new sub-feature · C major fix · D minor fix.
 
+## 1.1.0.3 - 2026-06-14
+
+Minor fix.
+
+### Fixed
+- **500 error on `/payment/plugin/multipay/initiate` (and `/return`).** The
+  handler dispatched `initiate`/`return`/`manage` with no error boundary, so any
+  thrown exception — including a plain GET of the initiate URL with no POST/CSRF,
+  or a not-logged-in request — bubbled up as a bare HTTP 500 with an empty body.
+  `handle()` now wraps these ops in a try/catch that logs the detail and renders
+  a friendly, theme-safe message page (HTTP 200). Webhooks are excluded so they
+  still answer the gateway with their own status code.
+- **Error/return pages no longer blank on include-style themes.** The catch
+  paths rendered the core `frontend/pages/message.tpl` (which is `{extends}`-based
+  and renders blank on themes with an include-style header, like EFTBHS). They now
+  use a new plugin-owned `templates/message.tpl` built on the `{include}` pattern,
+  with a "back to payment" link.
+
 ## 1.1.0.2 - 2026-06-14
 
 Minor fix.

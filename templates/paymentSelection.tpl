@@ -23,14 +23,26 @@
                 {/if}
 
                 <h3 class="multipay-sub">{translate key="plugins.paymethod.multipay.chooseGateway"}</h3>
-                <div class="multipay-seg" id="multipay-seg" role="tablist">
+                <div class="multipay-cards" id="multipay-seg" role="radiogroup" aria-label="{translate key="plugins.paymethod.multipay.chooseGateway"}">
                     {foreach from=$gateways item=gateway name=gw}
                         <button type="button"
-                            class="multipay-seg-btn{if $gateway@first} on{/if}{if $suggestion && $suggestion.id == $gateway.id} suggested{/if}"
+                            class="multipay-card{if $gateway@first} on{/if}{if $suggestion && $suggestion.id == $gateway.id} suggested{/if}"
                             data-gateway="{$gateway.id|escape}"
-                            role="tab"
-                            aria-selected="{if $gateway@first}true{else}false{/if}">
-                            {$gateway.label|escape}
+                            style="--mp-brand:{$gateway.brand|escape};--mp-on-brand:{$gateway.onBrand|escape};--mp-accent:{$gateway.accent|escape};"
+                            role="radio"
+                            aria-checked="{if $gateway@first}true{else}false{/if}">
+                            <span class="multipay-card-head">
+                                <span class="multipay-badge" aria-hidden="true">{$gateway.label|truncate:1:"":true|escape}</span>
+                                <span class="multipay-card-name">{$gateway.label|escape}</span>
+                                {if $suggestion && $suggestion.id == $gateway.id}<span class="multipay-card-rec">{translate key="plugins.paymethod.multipay.checkout.recommended"}</span>{/if}
+                                <span class="multipay-card-check" aria-hidden="true">&#10003;</span>
+                            </span>
+                            {if $gateway.tagline}<span class="multipay-card-tag">{$gateway.tagline|escape}</span>{/if}
+                            {if $gateway.methods}
+                                <span class="multipay-chips">
+                                    {foreach from=$gateway.methods item=method}<span class="multipay-chip">{$method|escape}</span>{/foreach}
+                                </span>
+                            {/if}
                         </button>
                     {/foreach}
                 </div>
@@ -78,14 +90,14 @@
     var hidden = document.getElementById('multipay-gateway');
     if (seg) {
         seg.addEventListener('click', function (e) {
-            var btn = e.target.closest('.multipay-seg-btn');
+            var btn = e.target.closest('.multipay-card');
             if (!btn) return;
-            seg.querySelectorAll('.multipay-seg-btn').forEach(function (b) {
+            seg.querySelectorAll('.multipay-card').forEach(function (b) {
                 b.classList.remove('on');
-                b.setAttribute('aria-selected', 'false');
+                b.setAttribute('aria-checked', 'false');
             });
             btn.classList.add('on');
-            btn.setAttribute('aria-selected', 'true');
+            btn.setAttribute('aria-checked', 'true');
             hidden.value = btn.getAttribute('data-gateway');
         });
     }

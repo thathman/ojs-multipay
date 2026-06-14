@@ -579,6 +579,74 @@ class MultiPayPlugin extends PaymethodPlugin
     }
 
     /**
+     * Presentation metadata for a gateway: official brand colour, on-brand text
+     * colour, a short tagline, and the consumer-facing payment instruments the
+     * gateway exposes (card, transfer, USSD, wallets, …). Drives the branded
+     * gateway cards on the checkout selector so payers can tell at a glance which
+     * gateway to use and what they can pay with.
+     *
+     * Keyed by a loose match on the gateway id (plugin name) so it survives the
+     * paystackplugin / flutterwaveplugin / paypalpayment / manualpayment naming.
+     *
+     * @return array{brand:string,onBrand:string,tagline:string,methods:string[]}
+     */
+    public function getGatewayPresentation(string $gatewayId): array
+    {
+        $id = strtolower($gatewayId);
+        $catalog = [
+            'paystack' => [
+                'brand' => '#011B33',
+                'onBrand' => '#ffffff',
+                'accent' => '#00C3F7',
+                'tagline' => __('plugins.paymethod.multipay.gateway.paystack.tagline'),
+                'methods' => ['card', 'transfer', 'ussd', 'opay', 'mobilemoney', 'applepay'],
+            ],
+            'flutterwave' => [
+                'brand' => '#F5A623',
+                'onBrand' => '#1a1208',
+                'accent' => '#F5A623',
+                'tagline' => __('plugins.paymethod.multipay.gateway.flutterwave.tagline'),
+                'methods' => ['card', 'transfer', 'ussd', 'mobilemoney', 'mpesa', 'barter'],
+            ],
+            'paypal' => [
+                'brand' => '#003087',
+                'onBrand' => '#ffffff',
+                'accent' => '#009CDE',
+                'tagline' => __('plugins.paymethod.multipay.gateway.paypal.tagline'),
+                'methods' => ['paypalbalance', 'card', 'paylater'],
+            ],
+            'manual' => [
+                'brand' => '#475569',
+                'onBrand' => '#ffffff',
+                'accent' => '#475569',
+                'tagline' => __('plugins.paymethod.multipay.gateway.manual.tagline'),
+                'methods' => ['offline'],
+            ],
+        ];
+
+        $meta = [
+            'brand' => '#1a1a1a',
+            'onBrand' => '#ffffff',
+            'accent' => 'var(--teal, #0f766e)',
+            'tagline' => '',
+            'methods' => [],
+        ];
+        foreach ($catalog as $key => $data) {
+            if (strpos($id, $key) !== false) {
+                $meta = $data;
+                break;
+            }
+        }
+
+        // Resolve method codes to localised labels for display.
+        $meta['methods'] = array_map(
+            fn($code) => __('plugins.paymethod.multipay.method.' . $code),
+            $meta['methods']
+        );
+        return $meta;
+    }
+
+    /**
      * Enabled gateways that can actually SETTLE the journal currency. A gateway
      * that cannot charge the journal currency is excluded entirely (not merely
      * "not suggested"), because MultiPay always charges the journal currency.
@@ -659,23 +727,58 @@ class MultiPayPlugin extends PaymethodPlugin
     public function handle($args, $request)
     {
         $op = isset($args[0]) ? $args[0] : 'default';
-        
-        switch ($op) {
-            case 'initiate':
-                $this->handleInitiate($request);
-                break;
-            case 'return': // Callback from gateway
-                $this->handleReturn($request);
-                break;
-            case 'webhook':
-                $this->handleWebhook($request, isset($args[1]) ? $args[1] : null);
-                break;
-            case 'manage':
-                $this->handleManage($request);
-                break;
-            default:
-                parent::handle($args, $request);
+
+        // Webhooks must answer the gateway with a plain status code, never an
+        // HTML error page; they handle their own response/exceptions.
+        if ($op === 'webhook') {
+            $this->handleWebhook($request, isset($args[1]) ? $args[1] : null);
+            return;
         }
+
+        try {
+            switch ($op) {
+                case 'initiate':
+                    $this->handleInitiate($request);
+                    break;
+                case 'return': // Callback from gateway
+                    $this->handleReturn($request);
+                    break;
+                case 'manage':
+                    $this->handleManage($request);
+                    break;
+                default:
+                    parent::handle($args, $request);
+            }
+        } catch (\Throwable $e) {
+            // Never surface a bare 500 to a payer. Log the detail and show a
+            // friendly, theme-safe message page instead.
+            error_log('[MultiPay] handle(' . $op . ') failed: ' . $e->getMessage());
+            $this->renderMessage(
+                $request,
+                'plugins.paymethod.multipay.error.generic',
+                true
+            );
+        }
+    }
+
+    /**
+     * Render a theme-safe message page (HTTP 200) instead of throwing. Uses the
+     * plugin's own {include}-pattern template so it renders on include-style
+     * themes (the core message.tpl is {extends}-based and blanks on those).
+     *
+     * @param string $message    Locale key (when $isKey) or literal text.
+     * @param bool   $isKey       Treat $message as a translate key.
+     * @param string $backUrl     Optional "back" link target.
+     */
+    protected function renderMessage($request, string $message, bool $isKey = true, string $backUrl = ''): void
+    {
+        $templateMgr = TemplateManager::getManager($request);
+        $templateMgr->assign([
+            'message' => $message,
+            'messageIsKey' => $isKey,
+            'backUrl' => $backUrl,
+        ]);
+        $templateMgr->display($this->getTemplateResource('message.tpl'));
     }
 
     /**
@@ -883,9 +986,12 @@ class MultiPayPlugin extends PaymethodPlugin
                 throw new \Exception("Gateway did not return a redirect URL.");
             } catch (\Exception $e) {
                 error_log('MultiPay initiation error: ' . $e->getMessage());
-                $templateMgr = TemplateManager::getManager($request);
-                $templateMgr->assign('message', 'plugins.paymethod.multipay.error.initiationFailed');
-                $templateMgr->display('frontend/pages/message.tpl');
+                $this->renderMessage(
+                    $request,
+                    'plugins.paymethod.multipay.error.initiationFailed',
+                    true,
+                    $cancelUrl
+                );
             }
             return;
         }
@@ -1002,9 +1108,12 @@ class MultiPayPlugin extends PaymethodPlugin
 
         } catch (\Exception $e) {
             error_log('MultiPay return error: ' . $e->getMessage());
-            $templateMgr = TemplateManager::getManager($request);
-            $templateMgr->assign('message', 'plugins.paymethod.multipay.error.verificationFailed');
-            $templateMgr->display('frontend/pages/message.tpl');
+            $this->renderMessage(
+                $request,
+                'plugins.paymethod.multipay.error.verificationFailed',
+                true,
+                isset($queuedPayment) && $queuedPayment ? $queuedPayment->getRequestUrl() : ''
+            );
         }
     }
 

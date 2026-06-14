@@ -101,6 +101,9 @@ msgstr "No payment gateways are currently available for this currency."
 msgid "plugins.paymethod.multipay.error.initiationFailed"
 msgstr "Payment initiation failed."
 
+msgid "plugins.paymethod.multipay.error.generic"
+msgstr "We could not process your payment request. Please return to the payment page and try again, or contact the journal if the problem persists."
+
 msgid "plugins.paymethod.multipay.error.verificationFailed"
 msgstr "Payment verification failed."
 
@@ -304,6 +307,56 @@ msgstr "We suggest {$gateway}, which supports {$currency}."
 
 msgid "plugins.paymethod.multipay.checkout.hostedNotice"
 msgstr "You'll be securely redirected to the selected provider to complete your payment."
+
+msgid "plugins.paymethod.multipay.checkout.recommended"
+msgstr "Recommended"
+
+# Gateway taglines (shown on the branded selection cards)
+msgid "plugins.paymethod.multipay.gateway.paystack.tagline"
+msgstr "Popular across Africa — pay with cards, bank transfer, USSD and wallets."
+
+msgid "plugins.paymethod.multipay.gateway.flutterwave.tagline"
+msgstr "Global and African coverage — cards, transfers, mobile money and more."
+
+msgid "plugins.paymethod.multipay.gateway.paypal.tagline"
+msgstr "Pay with your PayPal balance, linked card, or Pay Later."
+
+msgid "plugins.paymethod.multipay.gateway.manual.tagline"
+msgstr "Pay offline by bank transfer; access is confirmed once received."
+
+# Payment instruments / types per gateway (chips on the selection cards)
+msgid "plugins.paymethod.multipay.method.card"
+msgstr "Card"
+
+msgid "plugins.paymethod.multipay.method.transfer"
+msgstr "Bank Transfer"
+
+msgid "plugins.paymethod.multipay.method.ussd"
+msgstr "USSD"
+
+msgid "plugins.paymethod.multipay.method.opay"
+msgstr "Opay"
+
+msgid "plugins.paymethod.multipay.method.mobilemoney"
+msgstr "Mobile Money"
+
+msgid "plugins.paymethod.multipay.method.mpesa"
+msgstr "M-Pesa"
+
+msgid "plugins.paymethod.multipay.method.barter"
+msgstr "Barter"
+
+msgid "plugins.paymethod.multipay.method.applepay"
+msgstr "Apple Pay"
+
+msgid "plugins.paymethod.multipay.method.paypalbalance"
+msgstr "PayPal Balance"
+
+msgid "plugins.paymethod.multipay.method.paylater"
+msgstr "Pay Later"
+
+msgid "plugins.paymethod.multipay.method.offline"
+msgstr "Offline / Bank Transfer"
 
 msgid "plugins.paymethod.multipay.checkout.orderSummary"
 msgstr "Order summary"

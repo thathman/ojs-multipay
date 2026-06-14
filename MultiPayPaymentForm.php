@@ -89,6 +89,13 @@ class MultiPayPaymentForm extends Form
             }
         }
 
+        // Decorate each eligible gateway with official branding + the payment
+        // instruments it offers, so the selector renders branded cards.
+        foreach ($gatewayChoices as &$choice) {
+            $choice = array_merge($choice, $this->plugin->getGatewayPresentation($choice['id']));
+        }
+        unset($choice);
+
         require_once(dirname(__FILE__) . '/classes/Money.php');
         $journalFormatted = \APP\plugins\paymethod\multipay\classes\Money::format($amount, $currency);
 
