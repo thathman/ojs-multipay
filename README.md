@@ -10,7 +10,7 @@ and a full payment-management console hooked into the core `/payments` page.
 - **Compatibility:** OJS 3.5.0.0 – 3.5.0.3
 - **Licence:** GNU GPL v3 (see `LICENSE`)
 - **Type:** `plugins.paymethod`
-- **Version:** 1.1.0.1
+- **Version:** 1.1.0.2
 
 ## Maintainer
 - Name: Hendrix Nwaokolo
@@ -127,9 +127,9 @@ php plugins/paymethod/multipay/tests/run.php
 ## Releasing / packaging
 Following the [PKP plugin release guide](https://docs.pkp.sfu.ca/dev/plugin-guide/en/release):
 1. Bump `<release>` and `<date>` in `version.xml`; update `CHANGELOG.md`.
-2. Tag the commit (e.g. `git tag v1.1.0.1 && git push --tags`).
+2. Tag the commit (e.g. `git tag v1.1.0.2 && git push --tags`).
 3. Build the archive with the plugin folder at the top level:
    ```
-   tar -czf multipay-1.1.0.1.tar.gz --exclude-vcs --exclude='*.tar.gz' multipay/
+   tar -czf multipay-1.1.0.2.tar.gz --exclude-vcs --exclude='*.tar.gz' multipay/
    ```
 4. Attach the archive to the GitHub release for the tag.

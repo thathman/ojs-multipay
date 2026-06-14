@@ -1,6 +1,4 @@
-{extends file="frontend/components/header.tpl"}
-
-{block name="content"}
+{include file="frontend/components/header.tpl" pageTitle="plugins.paymethod.multipay.displayName"}
 <div class="pkp_structure_page_main pkp_structure_content">
     <div class="pkp_page_content">
         <h2>{translate key="plugins.paymethod.multipay.displayName"}</h2>
@@ -189,7 +187,6 @@
         {/if}
     </div>
 </div>
-{/block}
 
 {include file="frontend/components/footer.tpl"}
 

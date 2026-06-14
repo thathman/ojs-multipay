@@ -2,6 +2,21 @@
 
 Versioning: `A.B.C.D` — A new feature · B new sub-feature · C major fix · D minor fix.
 
+## 1.1.0.2 - 2026-06-14
+
+Minor fix.
+
+### Fixed
+- **Blank checkout / management pages on themes with an include-style header.**
+  The checkout (`paymentSelection.tpl`) and the legacy management console
+  (`manage.tpl`) used Smarty `{extends}` + `{block name="content"}`. On a theme
+  whose `frontend/components/header.tpl` is include-style and does not declare a
+  `content` block (e.g. the EFTBHS production theme), the extended content was
+  discarded and the page rendered blank (header only, no body, no error). Both
+  templates now use the `{include header}` … `{include footer}` pattern already
+  used by the gateway plugins and the receipt template, so they render correctly
+  on any theme.
+
 ## 1.1.0.1 - 2026-06-14
 
 Hardening + audit fixes (minor fixes).

@@ -1,6 +1,4 @@
-{extends file="frontend/components/header.tpl"}
-
-{block name="content"}
+{include file="frontend/components/header.tpl" pageTitle="plugins.paymethod.multipay.paymentSelection"}
 <link rel="stylesheet" href="{$baseUrl}/plugins/paymethod/multipay/styles/checkout.css">
 
 <div class="pkp_structure_page_main pkp_structure_content">
@@ -108,6 +106,5 @@
     }
 })();
 </script>
-{/block}
 
 {include file="frontend/components/footer.tpl"}
