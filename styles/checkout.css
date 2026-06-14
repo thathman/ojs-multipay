@@ -62,8 +62,8 @@
 
 /* ── Branded gateway cards ───────────────────────────── */
 .multipay-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: 12px;
   margin-bottom: 20px;
 }
@@ -209,12 +209,46 @@
   text-transform: uppercase;
   color: var(--mp-ink-3);
 }
+.multipay-order-type {
+  font-family: var(--mp-serif);
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--mp-ink);
+  margin: 0 0 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--mp-rule);
+}
+.multipay-order-meta {
+  margin: 0 0 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.multipay-order-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.multipay-order-row dt {
+  font-family: var(--mp-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--mp-ink-3);
+}
+.multipay-order-row dd {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: var(--mp-ink);
+}
 .multipay-li {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
   padding: 10px 0;
-  border-bottom: 1px solid var(--mp-rule);
+  border-top: 1px solid var(--mp-rule);
   font-size: 14px;
 }
 .multipay-li .k { color: var(--mp-ink-3); }
@@ -234,6 +268,48 @@
   line-height: 1.5;
   color: var(--mp-ink-3);
 }
+
+/* ── Accepted methods, inside each gateway card ───────── */
+.multipay-card-methods {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--mp-rule);
+}
+.multipay-card-mrow {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.multipay-card-mlabel {
+  flex: 0 0 auto;
+  min-width: 132px;
+  font-family: var(--mp-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mp-ink-3);
+}
+.multipay-card-mbadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.mp-net {
+  background: var(--mp-paper-2);
+  border: 1px solid var(--mp-rule-2);
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--mp-ink-2);
+  white-space: nowrap;
+}
+.mp-net.mp-opay { border-color: #00b074; color: #00875a; }
+.mp-net.mp-momo { border-color: #3b82f6; color: #1d4ed8; }
 
 @media (max-width: 980px) {
   .multipay-grid { grid-template-columns: 1fr; gap: 28px; }

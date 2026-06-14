@@ -311,6 +311,22 @@ msgstr "You'll be securely redirected to the selected provider to complete your 
 msgid "plugins.paymethod.multipay.checkout.recommended"
 msgstr "Recommended"
 
+msgid "plugins.paymethod.multipay.checkout.securedBy"
+msgstr "Secured by {$gateway}. We accept:"
+
+# Accepted-methods trust-footer section headings
+msgid "plugins.paymethod.multipay.method.section.cards"
+msgstr "Cards"
+
+msgid "plugins.paymethod.multipay.method.section.wallets"
+msgstr "Digital Wallets"
+
+msgid "plugins.paymethod.multipay.method.section.bank"
+msgstr "Bank Options"
+
+msgid "plugins.paymethod.multipay.method.section.momo"
+msgstr "Mobile Money (MoMo)"
+
 # Gateway taglines (shown on the branded selection cards)
 msgid "plugins.paymethod.multipay.gateway.paystack.tagline"
 msgstr "Popular across Africa — pay with cards, bank transfer, USSD and wallets."
@@ -363,6 +379,18 @@ msgstr "Order summary"
 
 msgid "plugins.paymethod.multipay.checkout.amount"
 msgstr "Amount"
+
+msgid "plugins.paymethod.multipay.checkout.article"
+msgstr "Article"
+
+msgid "plugins.paymethod.multipay.checkout.authors"
+msgstr "Author(s)"
+
+msgid "plugins.paymethod.multipay.checkout.submissionId"
+msgstr "Submission"
+
+msgid "plugins.paymethod.multipay.checkout.billedTo"
+msgstr "Billed to"
 
 msgid "plugins.paymethod.multipay.checkout.estimated"
 msgstr "Estimated"

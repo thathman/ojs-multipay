@@ -297,7 +297,6 @@ class MultiPayPlugin extends PaymethodPlugin
     {
         return [
             'paystackTestSecretKey', 'paystackLiveSecretKey',
-            'flutterwaveTestSecretKey', 'flutterwaveLiveSecretKey', 'flutterwaveWebhookSecret',
             'paypalTestSecret', 'paypalLiveSecret',
             'fxProviderKey',
         ];
@@ -325,13 +324,9 @@ class MultiPayPlugin extends PaymethodPlugin
                 ['paystackLivePublicKey', 'publicLive', false],
                 ['paystackLiveSecretKey', 'secretLive', true],
             ],
-            'flutterwaveplugin' => [
-                ['flutterwaveTestPublicKey', 'publicTest', false],
-                ['flutterwaveTestSecretKey', 'secretTest', true],
-                ['flutterwaveLivePublicKey', 'publicLive', false],
-                ['flutterwaveLiveSecretKey', 'secretLive', true],
-                ['flutterwaveWebhookSecret', 'webhookSecret', true],
-            ],
+            // Flutterwave is delegated to its own plugin (v4 OAuth); its Client ID /
+            // Client Secret are edited in the Flutterwave plugin's settings group,
+            // not inline here.
             'paypalpayment' => [
                 ['paypalTestClientId', 'clientTest', false],
                 ['paypalTestSecret', 'secretTest', true],
@@ -407,7 +402,11 @@ class MultiPayPlugin extends PaymethodPlugin
         // visible so staff can still edit them and revert to a single gateway.
         // Settings group ids used by each sibling gateway plugin (these are the
         // groups' own ids, which differ from the plugins' getName() values).
-        $absorbed = ['paystackpayment', 'flutterwavepayment', 'paypalpayment'];
+        // Flutterwave is NOT absorbed: MultiPay delegates Flutterwave charging to
+        // the standalone Flutterwave plugin (which speaks the v4 OAuth API), so its
+        // own settings group — carrying the v4 Client ID / Client Secret — must stay
+        // visible and editable while MultiPay is active.
+        $absorbed = ['paystackpayment', 'paypalpayment'];
         if (!empty($config['groups']) && is_array($config['groups'])) {
             $config['groups'] = array_values(array_filter(
                 $config['groups'],
@@ -593,6 +592,8 @@ class MultiPayPlugin extends PaymethodPlugin
     public function getGatewayPresentation(string $gatewayId): array
     {
         $id = strtolower($gatewayId);
+        // sections: 'cards'|'wallets'|'bank'|'momo' => [[label, tone], …]
+        // tone: '' (neutral) | 'opay' | 'momo'
         $catalog = [
             'paystack' => [
                 'brand' => '#011B33',
@@ -600,6 +601,12 @@ class MultiPayPlugin extends PaymethodPlugin
                 'accent' => '#00C3F7',
                 'tagline' => __('plugins.paymethod.multipay.gateway.paystack.tagline'),
                 'methods' => ['card', 'transfer', 'ussd', 'opay', 'mobilemoney', 'applepay'],
+                'sections' => [
+                    'cards' => [['Visa', ''], ['Mastercard', ''], ['Verve', ''], ['Amex', '']],
+                    'wallets' => [['Apple Pay', ''], ['OPay Wallet', 'opay'], ['SnapScan', '']],
+                    'bank' => [['Bank Transfer', ''], ['USSD (*737# etc)', ''], ['Bank Account (Direct)', ''], ['Visa QR', '']],
+                    'momo' => [['M-Pesa', 'momo'], ['MTN MoMo', 'momo'], ['Airtel Money', 'momo'], ['Telecel Cash', 'momo'], ['Orange Money', 'momo']],
+                ],
             ],
             'flutterwave' => [
                 'brand' => '#F5A623',
@@ -607,6 +614,12 @@ class MultiPayPlugin extends PaymethodPlugin
                 'accent' => '#F5A623',
                 'tagline' => __('plugins.paymethod.multipay.gateway.flutterwave.tagline'),
                 'methods' => ['card', 'transfer', 'ussd', 'mobilemoney', 'mpesa', 'barter'],
+                'sections' => [
+                    'cards' => [['Visa', ''], ['Mastercard', ''], ['Verve', ''], ['Amex', ''], ['Discover', '']],
+                    'wallets' => [['Apple Pay', ''], ['Google Pay', ''], ['OPay', 'opay'], ['Barter', '']],
+                    'bank' => [['Bank Transfer', ''], ['Direct Debit', ''], ['USSD', ''], ['NQR Code', ''], ['eNaira', '']],
+                    'momo' => [['M-Pesa', 'momo'], ['MTN MoMo', 'momo'], ['Airtel Money', 'momo'], ['Orange Money', 'momo'], ['FawryPay', '']],
+                ],
             ],
             'paypal' => [
                 'brand' => '#003087',
@@ -614,6 +627,10 @@ class MultiPayPlugin extends PaymethodPlugin
                 'accent' => '#009CDE',
                 'tagline' => __('plugins.paymethod.multipay.gateway.paypal.tagline'),
                 'methods' => ['paypalbalance', 'card', 'paylater'],
+                'sections' => [
+                    'cards' => [['Visa', ''], ['Mastercard', ''], ['Amex', ''], ['Discover', '']],
+                    'wallets' => [['PayPal Balance', ''], ['Pay Later', ''], ['Venmo', '']],
+                ],
             ],
             'manual' => [
                 'brand' => '#475569',
@@ -621,6 +638,9 @@ class MultiPayPlugin extends PaymethodPlugin
                 'accent' => '#475569',
                 'tagline' => __('plugins.paymethod.multipay.gateway.manual.tagline'),
                 'methods' => ['offline'],
+                'sections' => [
+                    'bank' => [['Bank Transfer (offline)', '']],
+                ],
             ],
         ];
 
@@ -630,6 +650,7 @@ class MultiPayPlugin extends PaymethodPlugin
             'accent' => 'var(--teal, #0f766e)',
             'tagline' => '',
             'methods' => [],
+            'sections' => [],
         ];
         foreach ($catalog as $key => $data) {
             if (strpos($id, $key) !== false) {
@@ -638,11 +659,24 @@ class MultiPayPlugin extends PaymethodPlugin
             }
         }
 
-        // Resolve method codes to localised labels for display.
+        // Resolve method codes to localised labels for the on-card chips.
         $meta['methods'] = array_map(
             fn($code) => __('plugins.paymethod.multipay.method.' . $code),
             $meta['methods']
         );
+
+        // Build the categorised "accepted methods" trust footer for this
+        // gateway, with localised section headings.
+        $footer = [];
+        foreach (($meta['sections'] ?? []) as $sectionKey => $items) {
+            $footer[] = [
+                'label' => __('plugins.paymethod.multipay.method.section.' . $sectionKey),
+                'items' => array_map(fn($it) => ['text' => $it[0], 'tone' => $it[1]], $items),
+            ];
+        }
+        $meta['footer'] = $footer;
+        unset($meta['sections']);
+
         return $meta;
     }
 
@@ -663,8 +697,21 @@ class MultiPayPlugin extends PaymethodPlugin
         $eligible = [];
         foreach ($choices as $choice) {
             $adapter = $this->getAdapter($choice['id'], $contextId);
-            // Keep gateways with no adapter (e.g. manual/delegated) — they handle
-            // their own currency rules downstream; only filter ones we can test.
+            // Delegated gateways (Flutterwave) have no adapter: filter them by the
+            // delegate plugin's configuration + their declared currency set so
+            // checkout never offers an unconfigured or unsupported gateway.
+            if (!$adapter && $this->isDelegatedGateway($choice['id'])) {
+                if (!$this->gatewayIsConfigured($choice['id'], $contextId)) {
+                    continue;
+                }
+                $selected = $this->getSelectedCurrencies($contextId, $choice['id'], $this->delegatedSupportedCurrencies($choice['id']));
+                if (in_array($currency, $selected, true)) {
+                    $eligible[] = $choice;
+                }
+                continue;
+            }
+            // Other adapterless gateways (e.g. Manual Payment) handle their own
+            // currency rules downstream.
             if (!$adapter) {
                 $eligible[] = $choice;
                 continue;
@@ -709,7 +756,11 @@ class MultiPayPlugin extends PaymethodPlugin
         }
         foreach ($eligible as $choice) {
             $adapter = $this->getAdapter($choice['id'], $contextId);
-            if ($adapter && $adapter->supportsCurrency($currency)) {
+            $supports = $adapter
+                ? $adapter->supportsCurrency($currency)
+                : ($this->isDelegatedGateway($choice['id'])
+                    && in_array(strtoupper($currency), $this->delegatedSupportedCurrencies($choice['id']), true));
+            if ($supports) {
                 return [
                     'id' => $choice['id'],
                     'label' => $choice['label'],
@@ -1408,6 +1459,48 @@ class MultiPayPlugin extends PaymethodPlugin
     }
 
     /**
+     * Gateways MultiPay routes to their own plugin rather than charging through
+     * an internal adapter (currently Flutterwave, which uses the v4 OAuth API
+     * implemented in the standalone Flutterwave plugin).
+     */
+    public function isDelegatedGateway(string $gatewayId): bool
+    {
+        return in_array(strtolower($this->normalizeGatewayId($gatewayId)), ['flutterwave', 'flutterwaveplugin'], true);
+    }
+
+    /**
+     * Currencies a delegated gateway can settle (there is no adapter to ask).
+     * Kept in sync with the Flutterwave plugin's supported set.
+     *
+     * @return string[]
+     */
+    public function delegatedSupportedCurrencies(string $gatewayId): array
+    {
+        if ($this->isDelegatedGateway($gatewayId)) {
+            return ['NGN', 'USD', 'EUR', 'GBP', 'GHS', 'KES', 'ZAR', 'XAF', 'XOF', 'UGX', 'RWF', 'TZS', 'EGP', 'MWK'];
+        }
+        return [];
+    }
+
+    /**
+     * Whether the standalone Flutterwave plugin has the v4 Client ID / Client
+     * Secret it needs (for the mode it is itself set to). MultiPay delegates the
+     * charge, so the credentials live in that plugin's settings.
+     */
+    protected function flutterwaveV4Configured(int $contextId): bool
+    {
+        $sib = $this->getPaymethodPlugin('flutterwaveplugin');
+        if (!$sib) {
+            return false;
+        }
+        $fwTest = (bool) $sib->getSetting($contextId, 'testMode');
+        $idKey = $fwTest ? 'v4TestClientId' : 'v4LiveClientId';
+        $secretKey = $fwTest ? 'v4TestClientSecret' : 'v4LiveClientSecret';
+        return trim((string) $sib->getSetting($contextId, $idKey)) !== ''
+            && trim((string) $sib->getSetting($contextId, $secretKey)) !== '';
+    }
+
+    /**
      * Whether a gateway has the credentials it needs to operate. Gateways with
      * no adapter (e.g. Manual Payment) are considered configured (they handle
      * their own setup downstream).
@@ -1415,7 +1508,10 @@ class MultiPayPlugin extends PaymethodPlugin
     public function gatewayIsConfigured(string $gatewayId, int $contextId): bool
     {
         $normalized = strtolower($this->normalizeGatewayId($gatewayId));
-        if (!in_array($normalized, ['paystack', 'paystackplugin', 'flutterwave', 'flutterwaveplugin', 'paypalpayment', 'paypal'], true)) {
+        if (in_array($normalized, ['flutterwave', 'flutterwaveplugin'], true)) {
+            return $this->flutterwaveV4Configured($contextId);
+        }
+        if (!in_array($normalized, ['paystack', 'paystackplugin', 'paypalpayment', 'paypal'], true)) {
             return true;
         }
         $creds = $this->resolveGatewayCredentials($gatewayId, $contextId);
@@ -1445,13 +1541,9 @@ class MultiPayPlugin extends PaymethodPlugin
                 new \APP\plugins\paymethod\multipay\classes\HttpClient()
             );
         } elseif (in_array($gatewayName, ['flutterwave', 'flutterwaveplugin'], true)) {
-            require_once(dirname(__FILE__) . '/classes/FlutterwaveAdapter.php');
-            return new \APP\plugins\paymethod\multipay\classes\FlutterwaveAdapter(
-                (string) ($creds['public'] ?? ''),
-                (string) ($creds['secret'] ?? ''),
-                (string) ($creds['webhook'] ?? ''),
-                new \APP\plugins\paymethod\multipay\classes\HttpClient()
-            );
+            // Delegated to the standalone Flutterwave plugin (v4 OAuth). MultiPay
+            // builds no adapter; charging is handled by that plugin's payment form.
+            return null;
         } elseif (in_array($gatewayName, ['paypalpayment', 'paypal'], true)) {
             if (empty($creds)) {
                 return null;

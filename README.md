@@ -10,7 +10,7 @@ and a full payment-management console hooked into the core `/payments` page.
 - **Compatibility:** OJS 3.5.0.0 – 3.5.0.3
 - **Licence:** GNU GPL v3 (see `LICENSE`)
 - **Type:** `plugins.paymethod`
-- **Version:** 1.1.0.2
+- **Version:** 1.2.0.0
 
 ## Maintainer
 - Name: Hendrix Nwaokolo
@@ -44,18 +44,21 @@ payer's bank) performs any real conversion at its own rate.
   are listed). The union becomes the allowed-currency set and a default
   currency→gateway route is derived automatically — no free-text currency box or
   routing JSON to hand-maintain.
-- **Inline credentials, Test + Live.** Manage every gateway's keys from the one
-  MultiPay group. The **Test Mode** toggle selects whether the Test or Live keys
-  are used. Secret fields are **write-only** (shown blank; enter a value only to
-  change it). Blank fields fall back to that gateway plugin's own configured keys.
+- **Inline credentials, Test + Live.** Manage Paystack and PayPal keys from the
+  one MultiPay group. The **Test Mode** toggle selects whether the Test or Live
+  keys are used. Secret fields are **write-only** (shown blank; enter a value only
+  to change it). Blank fields fall back to that gateway plugin's own configured
+  keys. (Flutterwave is delegated — see the gateway notes — so its Client ID /
+  Client Secret are managed in the Flutterwave plugin's own settings.)
 - **Webhook URL per gateway** is shown for you to paste into the gateway
   dashboard — required for dispute alerts and asynchronous refund confirmation.
 - **Fallback gateway** chooser, amount-tolerance, and FX/geo options, each with
   sensible defaults.
-- When MultiPay is the active payment plugin, the sibling gateway settings groups
-  (Paystack / Flutterwave / PayPal) are merged into MultiPay to avoid duplicate
-  configuration. The native payment-plugin selector and Manual Payment stay
-  visible, so you can revert to a single gateway at any time.
+- When MultiPay is the active payment plugin, the sibling settings groups for the
+  adapter-backed gateways (Paystack / PayPal) are merged into MultiPay to avoid
+  duplicate configuration. Flutterwave's group stays visible (it is delegated, so
+  its v4 Client ID/Secret are edited there). The native payment-plugin selector
+  and Manual Payment stay visible, so you can revert to a single gateway anytime.
 
 ### Payment management (`/payments`)
 The plugin's companion **paymethodSupport** generic plugin adds a *Payment
@@ -89,18 +92,19 @@ native adapters for, it reads the sibling plugin's keys as a fallback:
 | Gateway | API | Credential settings MultiPay reads (fallback) | Supported currencies |
 |---|---|---|---|
 | **Paystack** | v1 (Bearer secret) | `testPublicKey`, `testSecretKey`, `livePublicKey`, `liveSecretKey` | NGN, USD, GHS, ZAR, KES, XOF |
-| **Flutterwave** | adapter targets **v3** (Bearer secret) | `webhookHash` (webhook). See note below. | NGN, USD, EUR, GBP, GHS, KES, ZAR, XAF, XOF, UGX, RWF, TZS, EGP, MWK |
+| **Flutterwave** | **v4 (OAuth), delegated** to the Flutterwave plugin | **Client ID / Client Secret** in the Flutterwave plugin (`v4TestClientId`, `v4TestClientSecret`, `v4LiveClientId`, `v4LiveClientSecret`) | NGN, USD, EUR, GBP, GHS, KES, ZAR, XAF, XOF, UGX, RWF, TZS, EGP, MWK |
 | **PayPal** (experimental) | Omnipay PayPal_Rest v1 | `clientId`, `secret`, `testMode` | major PayPal currencies |
 | **Manual / others** | delegated | n/a (handled by the plugin's own form) | gateway-defined |
 
-> **Flutterwave v3/v4 note.** MultiPay's Flutterwave adapter currently targets
-> Flutterwave **API v3** (Bearer secret key). The standalone Flutterwave plugin
-> has moved to **v4** (OAuth client id/secret; settings `v4TestClientId`,
-> `v4TestClientSecret`, `v4LiveClientId`, `v4LiveClientSecret`). Because the key
-> *types* differ, MultiPay cannot auto-fill Flutterwave keys from the v4 plugin.
-> To orchestrate Flutterwave through MultiPay today, enter a v3-compatible
-> public/secret key inline in MultiPay's credentials. A v4 adapter is a tracked
-> follow-up.
+> **Flutterwave (v4) is delegated.** Flutterwave's modern credentials are an
+> OAuth **Client ID / Client Secret**, not v3 public/secret keys. Rather than
+> duplicate the v4 flow, MultiPay routes Flutterwave to the standalone
+> Flutterwave plugin (which implements v4: OAuth token, customer, hosted
+> checkout, webhooks, reconciliation). Configure the **Client ID / Client
+> Secret** (Test and Live) in the Flutterwave plugin's own settings — that group
+> stays visible while MultiPay is active. Note Flutterwave's **v4 sandbox does
+> not host a checkout page**, so a complete Flutterwave payment can only be made
+> in live mode.
 
 ## Installation
 1. Upload via the Plugin Gallery or extract to `plugins/paymethod/multipay`.
@@ -127,9 +131,9 @@ php plugins/paymethod/multipay/tests/run.php
 ## Releasing / packaging
 Following the [PKP plugin release guide](https://docs.pkp.sfu.ca/dev/plugin-guide/en/release):
 1. Bump `<release>` and `<date>` in `version.xml`; update `CHANGELOG.md`.
-2. Tag the commit (e.g. `git tag v1.1.0.2 && git push --tags`).
+2. Tag the commit (e.g. `git tag v1.2.0.0 && git push --tags`).
 3. Build the archive with the plugin folder at the top level:
    ```
-   tar -czf multipay-1.1.0.2.tar.gz --exclude-vcs --exclude='*.tar.gz' multipay/
+   tar -czf multipay-1.2.0.0.tar.gz --exclude-vcs --exclude='*.tar.gz' multipay/
    ```
 4. Attach the archive to the GitHub release for the tag.

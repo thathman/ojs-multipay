@@ -28,6 +28,7 @@
                         <button type="button"
                             class="multipay-card{if $gateway@first} on{/if}{if $suggestion && $suggestion.id == $gateway.id} suggested{/if}"
                             data-gateway="{$gateway.id|escape}"
+                            data-name="{$gateway.label|escape}"
                             style="--mp-brand:{$gateway.brand|escape};--mp-on-brand:{$gateway.onBrand|escape};--mp-accent:{$gateway.accent|escape};"
                             role="radio"
                             aria-checked="{if $gateway@first}true{else}false{/if}">
@@ -38,9 +39,16 @@
                                 <span class="multipay-card-check" aria-hidden="true">&#10003;</span>
                             </span>
                             {if $gateway.tagline}<span class="multipay-card-tag">{$gateway.tagline|escape}</span>{/if}
-                            {if $gateway.methods}
-                                <span class="multipay-chips">
-                                    {foreach from=$gateway.methods item=method}<span class="multipay-chip">{$method|escape}</span>{/foreach}
+                            {if $gateway.footer}
+                                <span class="multipay-card-methods">
+                                    {foreach from=$gateway.footer item=section}
+                                        <span class="multipay-card-mrow">
+                                            <span class="multipay-card-mlabel">{$section.label|escape}</span>
+                                            <span class="multipay-card-mbadges">
+                                                {foreach from=$section.items item=item}<span class="mp-net{if $item.tone} mp-{$item.tone|escape}{/if}">{$item.text|escape}</span>{/foreach}
+                                            </span>
+                                        </span>
+                                    {/foreach}
                                 </span>
                             {/if}
                         </button>
@@ -58,6 +66,22 @@
 
             <aside class="multipay-summary">
                 <h6 class="multipay-summary-h">{translate key="plugins.paymethod.multipay.checkout.orderSummary"}</h6>
+
+                {if $orderSummary.description}
+                    <div class="multipay-order-type">{$orderSummary.description|escape}</div>
+                {/if}
+
+                {if $orderSummary.rows}
+                    <dl class="multipay-order-meta">
+                        {foreach from=$orderSummary.rows item=row}
+                            <div class="multipay-order-row">
+                                <dt>{$row.label|escape}</dt>
+                                <dd>{$row.value|escape}</dd>
+                            </div>
+                        {/foreach}
+                    </dl>
+                {/if}
+
                 <div class="multipay-li">
                     <span class="k">{translate key="plugins.paymethod.multipay.checkout.amount"}</span>
                     <span class="v" id="multipay-amount-display">{$journalFormatted|escape}</span>

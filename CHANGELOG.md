@@ -2,6 +2,34 @@
 
 Versioning: `A.B.C.D` — A new feature · B new sub-feature · C major fix · D minor fix.
 
+## 1.2.0.0 - 2026-06-14
+
+New sub-feature / upgrade.
+
+### Changed
+- **Flutterwave is now delegated to the standalone Flutterwave plugin (v4 OAuth)**
+  instead of charged through an internal v3 adapter. Flutterwave's modern
+  credentials are a **Client ID / Client Secret** (OAuth client credentials),
+  not the v3 public/secret keys the old adapter expected, so the adapter could
+  not charge a v4-only account. MultiPay now routes Flutterwave through that
+  plugin's proven v4 flow (OAuth token, customer, hosted checkout session,
+  webhooks, reconciliation):
+  - `getAdapter('flutterwave')` returns no adapter; checkout selection falls
+    through to the existing delegate path (`getPaymentForm()->display()`).
+  - Eligibility/suggestion for Flutterwave use a declared currency set and a
+    configuration check that reads the Flutterwave plugin's v4 Client ID/Secret
+    (for the mode that plugin is set to).
+  - Flutterwave's own settings group is **no longer absorbed/hidden** when
+    MultiPay is active, so its Client ID / Client Secret stay editable; the
+    inline Flutterwave key fields (and their write-only secrets) were removed
+    from MultiPay's settings.
+
+### Notes
+- Configure Flutterwave's **Client ID / Client Secret** in the Flutterwave
+  plugin's settings (Test and Live). The v4 **sandbox does not host a checkout
+  page**, so an end-to-end Flutterwave payment can only be completed in live
+  mode; eligibility, settings, and the checkout hand-off are verified.
+
 ## 1.1.0.3 - 2026-06-14
 
 Minor fix.

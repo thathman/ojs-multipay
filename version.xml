@@ -13,7 +13,7 @@
 <version>
 	<application>multipay</application>
 	<type>plugins.paymethod</type>
-	<release>1.1.0.3</release>
+	<release>1.2.0.0</release>
 	<date>2026-06-14</date>
 	<lazy-load>0</lazy-load>
 	<class>APP\plugins\paymethod\multipay\MultiPayPlugin</class>

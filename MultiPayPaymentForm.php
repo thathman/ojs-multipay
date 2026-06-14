@@ -16,6 +16,8 @@ namespace APP\plugins\paymethod\multipay;
 
 use APP\core\Application;
 use APP\core\Request;
+use APP\facades\Repo;
+use APP\payment\ojs\OJSPaymentManager;
 use APP\template\TemplateManager;
 use PKP\form\Form;
 use PKP\payment\QueuedPayment;
@@ -99,6 +101,8 @@ class MultiPayPaymentForm extends Form
         require_once(dirname(__FILE__) . '/classes/Money.php');
         $journalFormatted = \APP\plugins\paymethod\multipay\classes\Money::format($amount, $currency);
 
+        $orderSummary = $this->buildOrderSummary($request, $journal);
+
         // Always render the POST selection form (with {csrf}), even for a single
         // gateway. The previous single-gateway shortcut issued a GET redirect to
         // ?op=initiate with no csrfToken, which handleInitiate()'s checkCSRF()
@@ -112,8 +116,74 @@ class MultiPayPaymentForm extends Form
             'journalFormatted' => $journalFormatted,
             'suggestion' => $suggestion,
             'fx' => $fx,
+            'orderSummary' => $orderSummary,
             'initiateUrl' => $request->url(null, 'payment', 'plugin', [$this->plugin->getName(), 'initiate']),
         ]);
         $templateMgr->display($this->plugin->getTemplateResource('paymentSelection.tpl'));
+    }
+
+    /**
+     * Build the human-readable order-summary detail rows for this payment:
+     * what it is for (fee type), the article being paid for where applicable,
+     * and who is being billed. Best-effort — any lookup that fails is skipped.
+     *
+     * @return array{description:string,rows:array<int,array{label:string,value:string}>}
+     */
+    protected function buildOrderSummary($request, $journal): array
+    {
+        $rows = [];
+        $description = '';
+
+        $type = (int) $this->queuedPayment->getType();
+        $assocId = (int) $this->queuedPayment->getAssocId();
+
+        try {
+            $paymentManager = Application::get()->getPaymentManager($journal);
+            $description = (string) $paymentManager->getPaymentName($this->queuedPayment);
+        } catch (\Throwable $e) {
+            $description = '';
+        }
+
+        // Article-linked fees (publication / article purchase): show the title.
+        $articleTypes = [
+            OJSPaymentManager::PAYMENT_TYPE_PUBLICATION,
+            OJSPaymentManager::PAYMENT_TYPE_PURCHASE_ARTICLE,
+            OJSPaymentManager::PAYMENT_TYPE_SUBMISSION,
+        ];
+        if ($assocId && in_array($type, $articleTypes, true)) {
+            try {
+                $submission = Repo::submission()->get($assocId);
+                if ($submission) {
+                    $publication = $submission->getCurrentPublication();
+                    if ($publication) {
+                        $title = trim((string) $publication->getLocalizedFullTitle());
+                        if ($title !== '') {
+                            $rows[] = ['label' => __('plugins.paymethod.multipay.checkout.article'), 'value' => $title];
+                        }
+                        $authors = trim((string) $publication->getShortAuthorString());
+                        if ($authors !== '') {
+                            $rows[] = ['label' => __('plugins.paymethod.multipay.checkout.authors'), 'value' => $authors];
+                        }
+                    }
+                    $rows[] = ['label' => __('plugins.paymethod.multipay.checkout.submissionId'), 'value' => '#' . $submission->getId()];
+                }
+            } catch (\Throwable $e) {
+                // Submission lookup failed — leave the article rows out.
+            }
+        }
+
+        // Who is being billed.
+        $user = $request->getUser();
+        if ($user) {
+            $payer = trim((string) $user->getFullName());
+            if ($payer === '') {
+                $payer = (string) $user->getEmail();
+            }
+            if ($payer !== '') {
+                $rows[] = ['label' => __('plugins.paymethod.multipay.checkout.billedTo'), 'value' => $payer];
+            }
+        }
+
+        return ['description' => $description, 'rows' => $rows];
     }
 }
