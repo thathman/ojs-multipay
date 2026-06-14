@@ -24,4 +24,7 @@ interface GatewayAdapterInterface
     public function refund(string $providerTransactionId, float $amount, string $currency): array;
     public function supportsCurrency(string $currency): bool;
     public function supportsRefunds(): bool;
+
+    /** @return string[] ISO-4217 codes this gateway can settle. */
+    public function getSupportedCurrencies(): array;
 }

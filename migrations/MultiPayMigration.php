@@ -52,7 +52,7 @@ class MultiPayMigration extends Migration
                 $table->string('reference');
                 $table->string('provider_tx_id')->nullable();
                 $table->string('status');
-                $table->decimal('amount', 10, 2);
+                $table->decimal('amount', 14, 4);
                 $table->string('currency', 3);
                 $table->string('trace_id')->nullable();
                 $table->timestamps();
@@ -82,7 +82,7 @@ class MultiPayMigration extends Migration
                 $table->string('gateway');
                 $table->string('reference');
                 $table->string('provider_tx_id');
-                $table->decimal('amount', 10, 2);
+                $table->decimal('amount', 14, 4);
                 $table->string('currency', 3);
                 $table->string('status');
                 $table->text('response_payload')->nullable();
@@ -112,11 +112,50 @@ class MultiPayMigration extends Migration
                 $table->string('provider_customer_id')->nullable();
                 $table->string('provider_plan_id')->nullable();
                 $table->string('currency', 3);
-                $table->decimal('amount', 10, 2);
+                $table->decimal('amount', 14, 4);
                 $table->string('interval')->default('monthly');
                 $table->boolean('is_active')->default(true);
                 $table->timestamps();
                 $table->index(['context_id', 'user_id'], 'multipay_recurring_profiles_ctx_user_idx');
+            });
+        }
+
+        // Exchange-rate cache (display-only FX). Rates are advisory estimates;
+        // the gateway is always charged the journal currency/amount.
+        if (!Schema::hasTable('multipay_exchange_rates')) {
+            Schema::create('multipay_exchange_rates', function (Blueprint $table) {
+                $table->bigIncrements('id');
+                $table->string('base', 3);
+                $table->string('quote', 3);
+                $table->decimal('rate', 18, 8);
+                $table->string('provider')->nullable();
+                $table->timestamp('fetched_at')->useCurrent();
+
+                $table->unique(['base', 'quote'], 'multipay_exchange_rates_pair_unique');
+            });
+        }
+
+        // Disputes / chargebacks. Rows are created/updated from gateway webhooks
+        // (auto-flag) and edited by staff (status/notes/resolution + history).
+        if (!Schema::hasTable('multipay_disputes')) {
+            Schema::create('multipay_disputes', function (Blueprint $table) {
+                $table->bigIncrements('id');
+                $table->bigInteger('context_id');
+                $table->string('gateway');
+                $table->string('reference');
+                $table->string('provider_dispute_id')->nullable();
+                $table->string('status')->default('open');
+                $table->string('reason')->nullable();
+                $table->decimal('amount', 14, 4)->default(0);
+                $table->string('currency', 3)->nullable();
+                $table->text('staff_notes')->nullable();
+                $table->mediumText('history_json')->nullable();
+                $table->timestamp('opened_at')->nullable();
+                $table->timestamp('resolved_at')->nullable();
+                $table->timestamps();
+
+                $table->unique(['gateway', 'reference'], 'multipay_disputes_ref_unique');
+                $table->index(['context_id', 'status'], 'multipay_disputes_ctx_status_idx');
             });
         }
 
@@ -138,6 +177,8 @@ class MultiPayMigration extends Migration
      */
     public function down(): void
     {
+        Schema::dropIfExists('multipay_disputes');
+        Schema::dropIfExists('multipay_exchange_rates');
         Schema::dropIfExists('multipay_settlement_reports');
         Schema::dropIfExists('multipay_recurring_profiles');
         Schema::dropIfExists('multipay_reconciliation_jobs');

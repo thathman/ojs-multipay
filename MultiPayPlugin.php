@@ -31,7 +31,7 @@ use PKP\components\forms\FieldText;
 use PKP\components\forms\FieldTextarea;
 use PKP\plugins\PluginRegistry;
 
-class MultipayPlugin extends PaymethodPlugin
+class MultiPayPlugin extends PaymethodPlugin
 {
     /**
      * @see Plugin::getName
@@ -106,39 +106,33 @@ class MultipayPlugin extends PaymethodPlugin
         $currentPluginField = $form->getField('paymentPluginName');
         $currentPlugin = $currentPluginField ? (string) $currentPluginField->value : '';
 
-        // The stock payment plugin selector is a core field added before hooks run.
-        // Remove it from the form object here, then strip it again from final config
-        // in finalizePaymentSettingsConfig() as a fallback against later mutations.
-        $form->removeField('paymentPluginName');
-        // Remove the per-gateway groups (and their fields) object-safely. The core
-        // FormComponent::removeGroup() accesses fields as arrays ($field['groupId'])
-        // while they are Field objects here, which fatals; filter directly instead.
-        $removeGroups = ['manualPayment', 'paypalpayment', 'paystackpayment', 'flutterwavepayment', 'paystackpaymentgateway', 'flutterwavepaymentgateway'];
-        $form->groups = array_values(array_filter(
-            $form->groups,
-            fn($group) => !in_array((string) ($group['id'] ?? ''), $removeGroups, true)
-        ));
-        $form->fields = array_values(array_filter(
-            $form->fields,
-            function ($field) use ($removeGroups) {
-                $groupId = is_object($field) ? ($field->groupId ?? null) : ($field['groupId'] ?? null);
-                return !in_array((string) $groupId, $removeGroups, true);
-            }
-        ));
+        // NOTE (bug fix): we deliberately no longer strip the other gateways'
+        // setting groups or hide the core paymentPluginName selector. Keeping
+        // them lets staff (a) edit each gateway's API keys directly and
+        // (b) switch the journal back to a single gateway via the native
+        // selector — which is the genuine "turn MultiPay off" path. MultiPay
+        // simply adds its own group alongside the others.
 
-        // paymentPluginName is persisted by the core _payments endpoint, not by plugin settings.
-        $form->addHiddenField('paymentPluginName', $this->getName());
+        // Adapter-backed gateways (Paystack/Flutterwave/PayPal) expose the
+        // currencies they can settle; staff tick which of those to support. The
+        // union of ticked currencies replaces the old free-text "Allowed
+        // Currencies" box, and the per-gateway map replaces the routing JSON.
+        $adapterGateways = $this->getAdapterBackedGateways($context->getId());
+        $fallbackOptions = array_merge(
+            [['value' => '', 'label' => __('plugins.paymethod.multipay.settings.fallbackGateway.none')]],
+            $gatewayOptions
+        );
 
         $form->addGroup([
             'id' => 'multipay',
             'label' => __('plugins.paymethod.multipay.displayName'),
             'showWhen' => 'paymentsEnabled',
-        ])
-            ->addField(new FieldText('paymentPluginNameReadonly', [
+        ]);
+
+        $form->addField(new FieldHTML('multipayActiveNotice', [
                 'label' => __('plugins.paymethod.multipay.settings.pluginMode'),
-                'value' => __('plugins.paymethod.multipay.settings.pluginMode.value'),
+                'description' => '<div class="pkpNotification pkpNotification--success"><p style="margin:0;">' . __('plugins.paymethod.multipay.settings.pluginMode.value') . '</p></div>',
                 'groupId' => 'multipay',
-                'isInert' => true,
             ]))
             ->addField(new FieldOptions('testMode', [
                 'label' => __('plugins.paymethod.multipay.settings.testMode'),
@@ -148,38 +142,39 @@ class MultipayPlugin extends PaymethodPlugin
                 'value' => (bool) $this->getSetting($context->getId(), 'testMode'),
                 'groupId' => 'multipay',
             ]))
-            ->addField(new FieldSelect('multipayGatewayTab', [
-                'label' => __('plugins.paymethod.multipay.settings.gatewayTabs'),
-                'options' => $gatewayOptions,
-                'value' => !empty($gatewayOptionValues) ? $gatewayOptionValues[0] : '',
-                'groupId' => 'multipay',
-            ]))
-            ->addField(new FieldTextarea('allowedCurrencies', [
-                'label' => __('plugins.paymethod.multipay.settings.allowedCurrencies'),
-                'description' => __('plugins.paymethod.multipay.settings.allowedCurrencies.description'),
-                'value' => $this->getSetting($context->getId(), 'allowedCurrencies'),
-                'groupId' => 'multipay',
-            ]))
             ->addField(new FieldOptions('enabledGateways', [
                 'label' => __('plugins.paymethod.multipay.settings.enabledGateways'),
                 'options' => $gatewayOptions,
                 'value' => $enabledGateways,
                 'groupId' => 'multipay',
             ]))
-            ->addField(new FieldTextarea('gatewayRoutingJson', [
-                'label' => __('plugins.paymethod.multipay.settings.gatewayRoutingJson'),
-                'description' => __('plugins.paymethod.multipay.settings.gatewayRoutingJson.description'),
-                'value' => $this->getSetting($context->getId(), 'gatewayRoutingJson'),
+            ->addField(new FieldHTML('multipayCurrencyHeading', [
+                'label' => __('plugins.paymethod.multipay.settings.gatewayCurrencies'),
+                'description' => '<p style="margin:0;color:#555;">' . __('plugins.paymethod.multipay.settings.gatewayCurrencies.description') . '</p>',
                 'groupId' => 'multipay',
-            ]))
-            ->addField(new FieldText('fallbackGateway', [
+            ]));
+
+        // One checkbox list per ENABLED adapter-backed gateway: the currencies it
+        // supports, with the ticked subset MultiPay will accept for it. (Only
+        // enabled gateways are shown — currencies are irrelevant for a gateway
+        // that is not in service.)
+        foreach ($adapterGateways as $gw) {
+            if (!in_array($gw['id'], $enabledGateways, true)) {
+                continue;
+            }
+            $form->addField(new FieldOptions('currencies_' . $gw['id'], [
+                'label' => $gw['label'],
+                'options' => array_map(fn($c) => ['value' => $c, 'label' => $c], $gw['currencies']),
+                'value' => $this->getSelectedCurrencies($context->getId(), $gw['id'], $gw['currencies']),
+                'groupId' => 'multipay',
+            ]));
+        }
+
+        $form->addField(new FieldSelect('fallbackGateway', [
                 'label' => __('plugins.paymethod.multipay.settings.fallbackGateway'),
+                'description' => __('plugins.paymethod.multipay.settings.fallbackGateway.description'),
+                'options' => $fallbackOptions,
                 'value' => $fallbackGateway,
-                'groupId' => 'multipay',
-            ]))
-            ->addField(new FieldText('logLevel', [
-                'label' => __('plugins.paymethod.multipay.settings.logLevel'),
-                'value' => $this->getSetting($context->getId(), 'logLevel') ?: 'error',
                 'groupId' => 'multipay',
             ]))
             ->addField(new FieldText('amountTolerance', [
@@ -193,23 +188,197 @@ class MultipayPlugin extends PaymethodPlugin
                 'groupId' => 'multipay',
                 'isInert' => true,
             ]))
-            ->addField(new FieldHTML('multipayGatewayHint', [
-                'label' => '',
-                'description' => '<div class="pkpNotification pkpNotification--notice"><p style="margin:0;">' . __('plugins.paymethod.multipay.settings.gatewayTabs.description') . '</p></div>',
+            ->addField(new FieldHTML('multipayRevertHint', [
+                'label' => __('plugins.paymethod.multipay.settings.revert'),
+                'description' => '<div class="pkpNotification pkpNotification--notice"><p style="margin:0;">' . __('plugins.paymethod.multipay.settings.revert.description') . '</p></div>',
                 'groupId' => 'multipay',
             ]));
 
-        foreach ($gatewayOptions as $option) {
-            $mode = strtolower((string) $option['value']) === strtolower($currentPlugin) ? __('plugins.paymethod.multipay.settings.gatewayMode.active') : __('plugins.paymethod.multipay.settings.gatewayMode.available');
-            $form->addField(new FieldHTML('multipayGatewayTabInfo_' . $option['value'], [
-                'label' => '',
-                'description' => '<div class="pkpNotification pkpNotification--default"><p style="margin:0;"><strong>' . htmlspecialchars($option['label'], ENT_QUOTES, 'UTF-8') . '</strong> — ' . htmlspecialchars($mode, ENT_QUOTES, 'UTF-8') . '</p></div>',
+        // Inline gateway credentials (test + live, switched by Test Mode), plus
+        // each gateway's webhook URL to paste into its dashboard. These write to
+        // MultiPay's own settings, which getAdapter() reads with priority over
+        // each sibling plugin's keys. Secrets are write-only (blank = keep).
+        $this->addCredentialFields($form, $context->getId(), $request, $adapterGateways);
+
+        // Display-only currency conversion (FX). Advisory estimate only; the
+        // gateway is always charged the journal currency/amount.
+        $form->addField(new FieldHTML('multipayFxHeading', [
+                'label' => __('plugins.paymethod.multipay.settings.fx'),
+                'description' => '<p style="margin:0;color:#555;">' . __('plugins.paymethod.multipay.settings.fx.description') . '</p>',
                 'groupId' => 'multipay',
-                'showWhen' => ['multipayGatewayTab', $option['value']],
+            ]))
+            ->addField(new FieldOptions('fxEnabled', [
+                'label' => __('plugins.paymethod.multipay.settings.fxEnabled'),
+                'options' => [['value' => true, 'label' => __('common.enable')]],
+                'value' => $this->getSetting($context->getId(), 'fxEnabled') === null ? true : (bool) $this->getSetting($context->getId(), 'fxEnabled'),
+                'groupId' => 'multipay',
+            ]))
+            ->addField(new FieldSelect('fxProvider', [
+                'label' => __('plugins.paymethod.multipay.settings.fxProvider'),
+                'options' => [
+                    ['value' => 'yahoo', 'label' => __('plugins.paymethod.multipay.settings.fxProvider.yahoo')],
+                    ['value' => 'custom', 'label' => __('plugins.paymethod.multipay.settings.fxProvider.custom')],
+                ],
+                'value' => (string) ($this->getSetting($context->getId(), 'fxProvider') ?: 'yahoo'),
+                'groupId' => 'multipay',
+            ]))
+            ->addField(new FieldText('fxProviderUrl', [
+                'label' => __('plugins.paymethod.multipay.settings.fxProviderUrl'),
+                'description' => __('plugins.paymethod.multipay.settings.fxProviderUrl.description'),
+                'value' => (string) $this->getSetting($context->getId(), 'fxProviderUrl'),
+                'groupId' => 'multipay',
+                'showWhen' => ['fxProvider', 'custom'],
+            ]))
+            ->addField(new FieldText('fxProviderKey', [
+                'label' => __('plugins.paymethod.multipay.settings.fxProviderKey'),
+                'value' => (string) $this->getSetting($context->getId(), 'fxProviderKey'),
+                'groupId' => 'multipay',
+                'showWhen' => ['fxProvider', 'custom'],
+            ]))
+            ->addField(new FieldText('fxRatePath', [
+                'label' => __('plugins.paymethod.multipay.settings.fxRatePath'),
+                'value' => (string) ($this->getSetting($context->getId(), 'fxRatePath') ?: 'rate'),
+                'groupId' => 'multipay',
+                'showWhen' => ['fxProvider', 'custom'],
+            ]))
+            ->addField(new FieldText('fxMarkupPercent', [
+                'label' => __('plugins.paymethod.multipay.settings.fxMarkupPercent'),
+                'description' => __('plugins.paymethod.multipay.settings.fxMarkupPercent.description'),
+                'value' => (string) ($this->getSetting($context->getId(), 'fxMarkupPercent') ?: '0'),
+                'groupId' => 'multipay',
+            ]))
+            ->addField(new FieldText('fxCacheTtl', [
+                'label' => __('plugins.paymethod.multipay.settings.fxCacheTtl'),
+                'description' => __('plugins.paymethod.multipay.settings.fxCacheTtl.description'),
+                'value' => (string) ($this->getSetting($context->getId(), 'fxCacheTtl') ?: '43200'),
+                'groupId' => 'multipay',
+            ]))
+            ->addField(new FieldTextarea('fxDisclaimer', [
+                'label' => __('plugins.paymethod.multipay.settings.fxDisclaimer'),
+                'value' => (string) ($this->getSetting($context->getId(), 'fxDisclaimer') ?: __('plugins.paymethod.multipay.checkout.fxDisclaimer.default')),
+                'groupId' => 'multipay',
+            ]))
+            // Location / currency detection (best-effort) and gateway suggestion.
+            ->addField(new FieldHTML('multipayGeoHeading', [
+                'label' => __('plugins.paymethod.multipay.settings.geo'),
+                'description' => '<p style="margin:0;color:#555;">' . __('plugins.paymethod.multipay.settings.geo.description') . '</p>',
+                'groupId' => 'multipay',
+            ]))
+            ->addField(new FieldOptions('geoDetectEnabled', [
+                'label' => __('plugins.paymethod.multipay.settings.geoDetectEnabled'),
+                'options' => [['value' => true, 'label' => __('common.enable')]],
+                'value' => $this->getSetting($context->getId(), 'geoDetectEnabled') === null ? true : (bool) $this->getSetting($context->getId(), 'geoDetectEnabled'),
+                'groupId' => 'multipay',
+            ]))
+            ->addField(new FieldOptions('suggestGatewayNotice', [
+                'label' => __('plugins.paymethod.multipay.settings.suggestGatewayNotice'),
+                'options' => [['value' => true, 'label' => __('common.enable')]],
+                'value' => $this->getSetting($context->getId(), 'suggestGatewayNotice') === null ? true : (bool) $this->getSetting($context->getId(), 'suggestGatewayNotice'),
+                'groupId' => 'multipay',
+            ]))
+            ->addField(new FieldTextarea('geoCountryCurrencyMap', [
+                'label' => __('plugins.paymethod.multipay.settings.geoCountryCurrencyMap'),
+                'description' => __('plugins.paymethod.multipay.settings.geoCountryCurrencyMap.description'),
+                'value' => (string) $this->getSetting($context->getId(), 'geoCountryCurrencyMap'),
+                'groupId' => 'multipay',
             ]));
-        }
 
         return true;
+    }
+
+    /**
+     * Setting keys that hold secrets. They are rendered write-only (never echoed
+     * back to the browser) and only overwritten when a non-empty value is
+     * submitted. See addCredentialFields() and saveSettings().
+     *
+     * @return string[]
+     */
+    protected function secretSettingKeys(): array
+    {
+        return [
+            'paystackTestSecretKey', 'paystackLiveSecretKey',
+            'flutterwaveTestSecretKey', 'flutterwaveLiveSecretKey', 'flutterwaveWebhookSecret',
+            'paypalTestSecret', 'paypalLiveSecret',
+            'fxProviderKey',
+        ];
+    }
+
+    /**
+     * Render inline gateway credentials as Test + Live pairs (selected at
+     * runtime by the MultiPay Test Mode toggle) plus the gateway's webhook URL.
+     * Secrets are write-only: shown blank, kept unless a new value is entered.
+     *
+     * @param array<int,array{id:string,label:string,currencies:string[]}> $adapterGateways
+     */
+    protected function addCredentialFields($form, int $contextId, $request, array $adapterGateways): void
+    {
+        $form->addField(new FieldHTML('multipayCredHeading', [
+            'label' => __('plugins.paymethod.multipay.settings.credentials'),
+            'description' => '<p style="margin:0;color:#555;">' . __('plugins.paymethod.multipay.settings.credentials.description') . '</p>',
+            'groupId' => 'multipay',
+        ]));
+
+        $specs = [
+            'paystackplugin' => [
+                ['paystackTestPublicKey', 'publicTest', false],
+                ['paystackTestSecretKey', 'secretTest', true],
+                ['paystackLivePublicKey', 'publicLive', false],
+                ['paystackLiveSecretKey', 'secretLive', true],
+            ],
+            'flutterwaveplugin' => [
+                ['flutterwaveTestPublicKey', 'publicTest', false],
+                ['flutterwaveTestSecretKey', 'secretTest', true],
+                ['flutterwaveLivePublicKey', 'publicLive', false],
+                ['flutterwaveLiveSecretKey', 'secretLive', true],
+                ['flutterwaveWebhookSecret', 'webhookSecret', true],
+            ],
+            'paypalpayment' => [
+                ['paypalTestClientId', 'clientTest', false],
+                ['paypalTestSecret', 'secretTest', true],
+                ['paypalLiveClientId', 'clientLive', false],
+                ['paypalLiveSecret', 'secretLive', true],
+            ],
+        ];
+
+        foreach ($adapterGateways as $gw) {
+            $id = strtolower($this->normalizeGatewayId((string) $gw['id']));
+            if (!isset($specs[$id])) {
+                continue;
+            }
+            $form->addField(new FieldHTML('multipayCredGw_' . $gw['id'], [
+                'label' => '',
+                'description' => '<h4 style="margin:1rem 0 .25rem;">' . htmlspecialchars((string) $gw['label'], ENT_QUOTES, 'UTF-8') . '</h4>',
+                'groupId' => 'multipay',
+            ]));
+            foreach ($specs[$id] as [$name, $kind, $isSecret]) {
+                $label = (string) $gw['label'] . ' — ' . __('plugins.paymethod.multipay.settings.cred.' . $kind);
+                if ($isSecret) {
+                    $set = trim((string) $this->getSetting($contextId, $name)) !== '';
+                    $form->addField(new FieldText($name, [
+                        'label' => $label,
+                        'value' => '',
+                        'description' => $set
+                            ? __('plugins.paymethod.multipay.settings.cred.secretSet')
+                            : __('plugins.paymethod.multipay.settings.cred.secretUnset'),
+                        'groupId' => 'multipay',
+                    ]));
+                } else {
+                    $form->addField(new FieldText($name, [
+                        'label' => $label,
+                        'value' => (string) $this->getSetting($contextId, $name),
+                        'groupId' => 'multipay',
+                    ]));
+                }
+            }
+            $webhookUrl = $request->url(null, 'payment', 'plugin', [$this->getName(), 'webhook', $gw['id']]);
+            $form->addField(new FieldText('webhookUrl_' . $gw['id'], [
+                'label' => (string) $gw['label'] . ' — ' . __('plugins.paymethod.multipay.settings.webhookUrl'),
+                'description' => __('plugins.paymethod.multipay.settings.webhookUrl.description'),
+                'value' => $webhookUrl,
+                'groupId' => 'multipay',
+                'isInert' => true,
+            ]));
+        }
     }
 
     /**
@@ -225,34 +394,31 @@ class MultipayPlugin extends PaymethodPlugin
             return;
         }
 
-        // Mirror the addSettings() gate: only strip other gateways' groups
-        // when MultiPay is the journal's selected payment plugin.
+        // Only merge while MultiPay is the active orchestrator.
         $context = Application::get()->getRequest()->getContext();
         if (!$context || strtolower((string) $context->getData('paymentPluginName')) !== strtolower((string) $this->getName())) {
             return;
         }
 
-        $groupsToRemove = ['paystackpayment', 'flutterwavepayment', 'paypalpayment', 'manualPayment', 'paystackpaymentgateway', 'flutterwavepaymentgateway'];
-
-        if (isset($config['groups']) && is_array($config['groups'])) {
-            $config['groups'] = array_values(array_filter($config['groups'], function ($group) use ($groupsToRemove) {
-                $id = is_array($group) ? ($group['id'] ?? null) : null;
-                return !$id || !in_array($id, $groupsToRemove, true);
-            }));
+        // Merge the gateways whose credentials/currencies MultiPay now manages
+        // inline (Paystack/Flutterwave/PayPal) into the MultiPay group, removing
+        // their duplicate sibling groups. The native paymentPluginName selector
+        // and any gateway MultiPay does not absorb (e.g. Manual Payment) stay
+        // visible so staff can still edit them and revert to a single gateway.
+        // Settings group ids used by each sibling gateway plugin (these are the
+        // groups' own ids, which differ from the plugins' getName() values).
+        $absorbed = ['paystackpayment', 'flutterwavepayment', 'paypalpayment'];
+        if (!empty($config['groups']) && is_array($config['groups'])) {
+            $config['groups'] = array_values(array_filter(
+                $config['groups'],
+                fn($group) => !in_array(strtolower((string) ($group['id'] ?? '')), $absorbed, true)
+            ));
         }
-
-        if (isset($config['fields']) && is_array($config['fields'])) {
-            $config['fields'] = array_values(array_filter($config['fields'], function ($field) use ($groupsToRemove) {
-                if (!is_array($field)) {
-                    return true;
-                }
-                $name = $field['name'] ?? null;
-                $groupId = $field['groupId'] ?? null;
-                if ($name === 'paymentPluginName') {
-                    return false;
-                }
-                return !$groupId || !in_array($groupId, $groupsToRemove, true);
-            }));
+        if (!empty($config['fields']) && is_array($config['fields'])) {
+            $config['fields'] = array_values(array_filter(
+                $config['fields'],
+                fn($field) => !in_array(strtolower((string) ($field['groupId'] ?? '')), $absorbed, true)
+            ));
         }
     }
 
@@ -265,18 +431,69 @@ class MultipayPlugin extends PaymethodPlugin
         $request = $args[1];
         $updatedSettings = $args[3];
 
+        $contextId = $request->getContext()->getId();
         $allParams = $illuminateRequest->input();
         $saveParams = [];
+        $currencySelections = [];
         foreach ($allParams as $param => $val) {
+            // Per-gateway currency checkbox lists (currencies_<gatewayId>).
+            if (strpos($param, 'currencies_') === 0) {
+                $gatewayId = substr($param, strlen('currencies_'));
+                $codes = array_values(array_unique(array_map(
+                    fn($c) => strtoupper(trim((string) $c)),
+                    (array) $val
+                )));
+                $codes = array_filter($codes);
+                $currencySelections[$gatewayId] = $codes;
+                $saveParams[$param] = $codes;
+                continue;
+            }
+            // Secrets are write-only: only overwrite when a non-empty value is
+            // submitted, so a blank field keeps the stored secret.
+            if (in_array($param, $this->secretSettingKeys(), true)) {
+                if (trim((string) $val) !== '') {
+                    $saveParams[$param] = (string) $val;
+                }
+                continue;
+            }
             switch ($param) {
-                case 'allowedCurrencies':
-                case 'gatewayRoutingJson':
                 case 'fallbackGateway':
-                case 'logLevel':
-                case 'amountTolerance':
+                case 'paystackTestPublicKey':
+                case 'paystackLivePublicKey':
+                case 'flutterwaveTestPublicKey':
+                case 'flutterwaveLivePublicKey':
+                case 'paypalTestClientId':
+                case 'paypalLiveClientId':
+                case 'fxProvider':
+                case 'fxProviderUrl':
+                case 'fxRatePath':
+                case 'fxDisclaimer':
                     $saveParams[$param] = (string) $val;
                     break;
+                // Numeric settings — clamped to safe ranges (B/UX hardening).
+                case 'amountTolerance':
+                    $saveParams[$param] = (string) max(0.0, min(1000.0, (float) $val));
+                    break;
+                case 'fxMarkupPercent':
+                    $saveParams[$param] = (string) max(-100.0, min(100.0, (float) $val));
+                    break;
+                case 'fxCacheTtl':
+                    $saveParams[$param] = (string) max(60, min(604800, (int) $val));
+                    break;
+                case 'geoCountryCurrencyMap':
+                    // Only store valid JSON objects; otherwise keep the previous
+                    // value rather than silently storing garbage.
+                    $raw = trim((string) $val);
+                    if ($raw === '') {
+                        $saveParams[$param] = '';
+                    } elseif (is_array(json_decode($raw, true))) {
+                        $saveParams[$param] = $raw;
+                    }
+                    break;
                 case 'testMode':
+                case 'fxEnabled':
+                case 'geoDetectEnabled':
+                case 'suggestGatewayNotice':
                     $saveParams[$param] = $val === 'true';
                     break;
                 case 'enabledGateways':
@@ -284,17 +501,38 @@ class MultipayPlugin extends PaymethodPlugin
                     break;
             }
         }
-        $contextId = $request->getContext()->getId();
         if (isset($saveParams['fallbackGateway'])) {
             $saveParams['fallbackGateway'] = $this->normalizeGatewayId((string) $saveParams['fallbackGateway']);
         }
-        $this->updateSetting($contextId, 'paymentPluginName', $this->getName());
-        if (empty($saveParams['enabledGateways'])) {
-            $gatewayOptions = $this->getInstalledGatewayOptions();
-            if (!empty($gatewayOptions)) {
-                $saveParams['enabledGateways'] = array_column($gatewayOptions, 'value');
+
+        // Derive the legacy routing inputs from the per-gateway currency matrix
+        // so the existing routing/eligibility code keeps working unchanged:
+        //  - allowedCurrencies = the union of every ticked currency.
+        //  - gatewayRoutingJson = currency -> first gateway that supports it,
+        //    in enabled-gateway order (a sensible default route per currency).
+        if (!empty($currencySelections)) {
+            $enabledOrder = $this->normalizeGatewayList((array) ($saveParams['enabledGateways'] ?? $this->getSetting($contextId, 'enabledGateways')));
+            $orderedGateways = array_values(array_unique(array_merge(
+                $enabledOrder,
+                array_keys($currencySelections)
+            )));
+            $allowed = [];
+            $routingMap = [];
+            foreach ($orderedGateways as $gatewayId) {
+                foreach (($currencySelections[$gatewayId] ?? []) as $code) {
+                    $allowed[$code] = true;
+                    if (!isset($routingMap[$code])) {
+                        $routingMap[$code] = $gatewayId;
+                    }
+                }
             }
+            $saveParams['allowedCurrencies'] = implode(', ', array_keys($allowed));
+            $saveParams['gatewayRoutingJson'] = $routingMap ? json_encode($routingMap) : '';
         }
+        $this->updateSetting($contextId, 'paymentPluginName', $this->getName());
+        // Note: an empty enabledGateways selection is honoured as-is (no silent
+        // re-enable of every installed gateway). With none enabled, MultiPay is
+        // effectively inactive at checkout (isConfigured() returns false).
         foreach ($saveParams as $param => $val) {
             $this->updateSetting($contextId, $param, $val);
             $updatedSettings->put($param, $val);
@@ -338,6 +576,81 @@ class MultipayPlugin extends PaymethodPlugin
             ];
         }
         return $choices;
+    }
+
+    /**
+     * Enabled gateways that can actually SETTLE the journal currency. A gateway
+     * that cannot charge the journal currency is excluded entirely (not merely
+     * "not suggested"), because MultiPay always charges the journal currency.
+     *
+     * @return array<int,array{id:string,label:string}>
+     */
+    public function getEligibleGatewayChoices(int $contextId, string $journalCurrency): array
+    {
+        $choices = $this->getEnabledGatewayChoices($contextId);
+        $currency = strtoupper($journalCurrency);
+        if ($currency === '') {
+            return $choices;
+        }
+        $eligible = [];
+        foreach ($choices as $choice) {
+            $adapter = $this->getAdapter($choice['id'], $contextId);
+            // Keep gateways with no adapter (e.g. manual/delegated) — they handle
+            // their own currency rules downstream; only filter ones we can test.
+            if (!$adapter) {
+                $eligible[] = $choice;
+                continue;
+            }
+            // Drop gateways that are enabled but not yet configured with keys —
+            // otherwise checkout would offer them and fail at initiation.
+            if (!$this->gatewayIsConfigured($choice['id'], $contextId)) {
+                continue;
+            }
+            // A gateway is eligible only if the journal currency is both
+            // supported by the gateway and ticked in its currency selection.
+            $selected = $this->getSelectedCurrencies($contextId, $choice['id'], $adapter->getSupportedCurrencies());
+            if (in_array($currency, $selected, true)) {
+                $eligible[] = $choice;
+            }
+        }
+        return $eligible;
+    }
+
+    /**
+     * Suggest the best eligible gateway for the payer's detected currency.
+     *
+     * @param array<int,array{id:string,label:string}> $eligible
+     * @return array{id:string,label:string,country:string,currency:string}|null
+     */
+    public function suggestGateway($request, int $contextId, array $eligible): ?array
+    {
+        if (count($eligible) < 2) {
+            return null;
+        }
+        if (!(bool) ($this->getSetting($contextId, 'geoDetectEnabled') ?? true)) {
+            return null;
+        }
+        require_once(dirname(__FILE__) . '/classes/services/LocaleCurrencyService.php');
+        $locale = new \APP\plugins\paymethod\multipay\classes\services\LocaleCurrencyService(
+            (string) $this->getSetting($contextId, 'geoCountryCurrencyMap')
+        );
+        $country = $locale->detectCountry($request);
+        $currency = $locale->detectCurrency($request);
+        if ($currency === '') {
+            return null;
+        }
+        foreach ($eligible as $choice) {
+            $adapter = $this->getAdapter($choice['id'], $contextId);
+            if ($adapter && $adapter->supportsCurrency($currency)) {
+                return [
+                    'id' => $choice['id'],
+                    'label' => $choice['label'],
+                    'country' => $locale->countryName($country),
+                    'currency' => $currency,
+                ];
+            }
+        }
+        return null;
     }
 
     /**
@@ -412,27 +725,14 @@ class MultipayPlugin extends PaymethodPlugin
 
         $templateMgr = TemplateManager::getManager($request);
         if ($action === 'refund') {
-            $gateway = (string) $request->getUserVar('gateway');
-            $providerTxId = (string) $request->getUserVar('providerTxId');
-            $amount = (float) $request->getUserVar('amount');
-            $currency = (string) $request->getUserVar('currency');
-            $reference = (string) $request->getUserVar('reference');
-            $adapter = $this->getAdapter($gateway, $context->getId());
-            if ($adapter && $adapter->supportsRefunds()) {
-                $refundResult = $adapter->refund($providerTxId, $amount, $currency);
-                \Illuminate\Support\Facades\DB::table('multipay_refunds')->insert([
-                    'context_id' => (int) $context->getId(),
-                    'gateway' => $gateway,
-                    'reference' => $reference,
-                    'provider_tx_id' => $providerTxId,
-                    'amount' => $amount,
-                    'currency' => strtoupper($currency),
-                    'status' => $refundResult['status'],
-                    'response_payload' => json_encode($refundResult['raw'] ?? []),
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-            }
+            $this->requestRefund(
+                (int) $context->getId(),
+                (string) $request->getUserVar('gateway'),
+                (string) $request->getUserVar('reference'),
+                (string) $request->getUserVar('providerTxId'),
+                (float) $request->getUserVar('amount'),
+                (string) $request->getUserVar('currency')
+            );
         } elseif ($action === 'settlementReport') {
             $start = $request->getUserVar('periodStart') ?: date('Y-m-01');
             $end = $request->getUserVar('periodEnd') ?: date('Y-m-d');
@@ -749,6 +1049,24 @@ class MultipayPlugin extends PaymethodPlugin
             http_response_code(400);
             exit();
         }
+
+        // Dispute / chargeback auto-flag. Dispute events pass the SAME signature
+        // gate as payment events (above). Record/update the dispute row; tolerate
+        // out-of-order resolve-before-create via updateOrInsert.
+        if (stripos($eventType, 'dispute') !== false || stripos($eventType, 'chargeback') !== false) {
+            $this->recordDisputeFromWebhook((int) $journal->getId(), $gatewayName, $eventType, $reference ? (string) $reference : '', $normalized, $decoded);
+            http_response_code(200);
+            exit();
+        }
+
+        // Refund confirmation. The manager submits refunds as async requests;
+        // the gateway confirms the final state via a refund.* webhook.
+        if (stripos($eventType, 'refund') !== false && $reference) {
+            $this->updateRefundFromWebhook((int) $journal->getId(), $gatewayName, (string) $reference, $normalized);
+            http_response_code(200);
+            exit();
+        }
+
         if ($reference) {
             require_once(dirname(__FILE__) . '/classes/services/IdempotencyService.php');
             require_once(dirname(__FILE__) . '/classes/services/ReferenceService.php');
@@ -795,50 +1113,288 @@ class MultipayPlugin extends PaymethodPlugin
         exit();
     }
 
+    /**
+     * Submit a refund request (idempotent, amount-capped). Refunds are modelled
+     * as asynchronous: the row is recorded with the adapter's reported status
+     * (commonly "pending"); the final state arrives via the gateway's refund
+     * webhook. Shared by the legacy manage console and the payment manager.
+     *
+     * @return array{status:string}
+     * @throws \Exception on validation failure or duplicate submission.
+     */
+    public function requestRefund(int $contextId, string $gateway, string $reference, string $providerTxId, float $amount, string $currency): array
+    {
+        $gateway = $this->normalizeGatewayId($gateway);
+        $adapter = $this->getAdapter($gateway, $contextId);
+        if (!$adapter || !$adapter->supportsRefunds()) {
+            throw new \Exception('This gateway does not support refunds.');
+        }
+        if ($amount <= 0) {
+            throw new \Exception('Refund amount must be positive.');
+        }
+
+        // B2 — over-refund / replay guard.
+        $tx = \Illuminate\Support\Facades\DB::table('multipay_transactions')
+            ->where('context_id', $contextId)
+            ->where('gateway', $gateway)
+            ->where('reference', $reference)
+            ->first();
+        $captured = $tx ? (float) $tx->amount : 0.0;
+        $alreadyRefunded = (float) \Illuminate\Support\Facades\DB::table('multipay_refunds')
+            ->where('context_id', $contextId)
+            ->where('reference', $reference)
+            ->whereIn('status', ['success', 'pending'])
+            ->sum('amount');
+        if ($captured > 0 && ($alreadyRefunded + $amount) > $captured + 0.001) {
+            throw new \Exception('Refund exceeds the remaining refundable amount.');
+        }
+
+        require_once(dirname(__FILE__) . '/classes/services/IdempotencyService.php');
+        $idempotency = new \APP\plugins\paymethod\multipay\classes\services\IdempotencyService();
+        $refundKey = 'refund:' . $reference . ':' . number_format($amount, 4, '.', '');
+        if (!$idempotency->claim($contextId, $gateway, $refundKey)) {
+            throw new \Exception('Duplicate refund request ignored.');
+        }
+
+        $refundResult = $adapter->refund($providerTxId, $amount, $currency);
+        $status = (string) ($refundResult['status'] ?? 'pending');
+        \Illuminate\Support\Facades\DB::table('multipay_refunds')->insert([
+            'context_id' => $contextId,
+            'gateway' => $gateway,
+            'reference' => $reference,
+            'provider_tx_id' => $providerTxId,
+            'amount' => $amount,
+            'currency' => strtoupper($currency),
+            'status' => $status,
+            'response_payload' => json_encode($refundResult['raw'] ?? []),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        return ['status' => $status];
+    }
+
+    /**
+     * Create or update a dispute row from a verified gateway webhook.
+     */
+    protected function recordDisputeFromWebhook(int $contextId, string $gateway, string $eventType, string $reference, array $normalized, array $decoded): void
+    {
+        if ($reference === '') {
+            // Best-effort: try to dig a reference out of the raw payload.
+            $reference = (string) ($decoded['data']['reference'] ?? $decoded['data']['tx_ref'] ?? '');
+        }
+        if ($reference === '') {
+            return;
+        }
+        $resolved = stripos($eventType, 'resolve') !== false || stripos($eventType, 'close') !== false;
+        $status = $resolved ? 'resolved' : 'open';
+        $reason = (string) ($decoded['data']['reason'] ?? $decoded['data']['category'] ?? '');
+        $amount = (float) ($normalized['amount'] ?? ($decoded['data']['amount'] ?? 0));
+        $currency = strtoupper((string) ($normalized['currency'] ?? ($decoded['data']['currency'] ?? '')));
+
+        $existing = \Illuminate\Support\Facades\DB::table('multipay_disputes')
+            ->where('context_id', $contextId)->where('gateway', $gateway)->where('reference', $reference)->first();
+        $history = [];
+        if ($existing && $existing->history_json) {
+            $decodedHist = json_decode((string) $existing->history_json, true);
+            $history = is_array($decodedHist) ? $decodedHist : [];
+        }
+        $history[] = ['at' => date('c'), 'by' => 'webhook', 'status' => $status, 'event' => $eventType];
+
+        $values = [
+            'status' => $status,
+            'reason' => $reason ?: ($existing->reason ?? null),
+            'amount' => $amount ?: ($existing->amount ?? 0),
+            'currency' => $currency ?: ($existing->currency ?? null),
+            'history_json' => json_encode($history),
+            'resolved_at' => $resolved ? now() : ($existing->resolved_at ?? null),
+            'updated_at' => now(),
+        ];
+        if ($existing) {
+            \Illuminate\Support\Facades\DB::table('multipay_disputes')->where('id', $existing->id)->update($values);
+        } else {
+            $values = array_merge($values, [
+                'context_id' => $contextId,
+                'gateway' => $gateway,
+                'reference' => $reference,
+                'opened_at' => now(),
+                'created_at' => now(),
+            ]);
+            \Illuminate\Support\Facades\DB::table('multipay_disputes')->insert($values);
+        }
+    }
+
+    /**
+     * Update a refund row's status from a verified refund.* webhook.
+     */
+    protected function updateRefundFromWebhook(int $contextId, string $gateway, string $reference, array $normalized): void
+    {
+        $status = strtolower((string) ($normalized['status'] ?? ''));
+        $final = in_array($status, ['success', 'successful', 'completed', 'refunded'], true) ? 'success'
+            : (in_array($status, ['failed', 'declined'], true) ? 'failed' : 'pending');
+        \Illuminate\Support\Facades\DB::table('multipay_refunds')
+            ->where('context_id', $contextId)
+            ->where('gateway', $gateway)
+            ->where('reference', $reference)
+            ->where('status', 'pending')
+            ->update(['status' => $final, 'updated_at' => now()]);
+    }
+
+    /**
+     * Resolve effective credentials for a gateway. The MultiPay Test Mode toggle
+     * selects the test or live key set; each MultiPay inline key falls back to
+     * the sibling plugin's matching key, and live keys also fall back to the
+     * pre-1.1 single-pair settings for backward compatibility.
+     *
+     * @return array<string,mixed> e.g. ['public'=>,'secret'=>,'webhook'=>,'testMode'=>]
+     *         or for PayPal ['client'=>,'secret'=>,'testMode'=>]; [] if unknown.
+     */
+    protected function resolveGatewayCredentials(string $gatewayId, int $contextId): array
+    {
+        $gatewayId = strtolower($this->normalizeGatewayId($gatewayId));
+        $testMode = (bool) $this->getSetting($contextId, 'testMode');
+
+        $pick = function (string $mpTest, string $mpLive, ?string $legacyLive, string $sibKey, $sibling) use ($contextId, $testMode) {
+            if ($testMode) {
+                $sibVal = $sibling ? (string) $sibling->getSetting($contextId, 'test' . ucfirst($sibKey)) : '';
+                return (string) ($this->getSetting($contextId, $mpTest) ?: $sibVal);
+            }
+            $sibVal = $sibling ? (string) $sibling->getSetting($contextId, 'live' . ucfirst($sibKey)) : '';
+            $legacy = $legacyLive ? (string) $this->getSetting($contextId, $legacyLive) : '';
+            return (string) ($this->getSetting($contextId, $mpLive) ?: $legacy ?: $sibVal);
+        };
+
+        if (in_array($gatewayId, ['paystack', 'paystackplugin'], true)) {
+            $sib = $this->getPaymethodPlugin('paystackplugin');
+            return [
+                'public' => $pick('paystackTestPublicKey', 'paystackLivePublicKey', 'paystackPublicKey', 'PublicKey', $sib),
+                'secret' => $pick('paystackTestSecretKey', 'paystackLiveSecretKey', 'paystackSecretKey', 'SecretKey', $sib),
+                'testMode' => $testMode,
+            ];
+        }
+        if (in_array($gatewayId, ['flutterwave', 'flutterwaveplugin'], true)) {
+            $sib = $this->getPaymethodPlugin('flutterwaveplugin');
+            $webhook = (string) ($this->getSetting($contextId, 'flutterwaveWebhookSecret')
+                ?: ($sib ? (string) $sib->getSetting($contextId, 'webhookHash') : ''));
+            return [
+                'public' => $pick('flutterwaveTestPublicKey', 'flutterwaveLivePublicKey', 'flutterwavePublicKey', 'PublicKey', $sib),
+                'secret' => $pick('flutterwaveTestSecretKey', 'flutterwaveLiveSecretKey', 'flutterwaveSecretKey', 'SecretKey', $sib),
+                'webhook' => $webhook,
+                'testMode' => $testMode,
+            ];
+        }
+        if (in_array($gatewayId, ['paypalpayment', 'paypal'], true)) {
+            $sib = $this->getPaymethodPlugin('paypalpayment');
+            if (!$sib) {
+                return [];
+            }
+            $client = $testMode
+                ? (string) ($this->getSetting($contextId, 'paypalTestClientId') ?: $sib->getSetting($contextId, 'clientId'))
+                : (string) ($this->getSetting($contextId, 'paypalLiveClientId') ?: $this->getSetting($contextId, 'paypalClientId') ?: $sib->getSetting($contextId, 'clientId'));
+            $secret = $testMode
+                ? (string) ($this->getSetting($contextId, 'paypalTestSecret') ?: $sib->getSetting($contextId, 'secret'))
+                : (string) ($this->getSetting($contextId, 'paypalLiveSecret') ?: $this->getSetting($contextId, 'paypalSecret') ?: $sib->getSetting($contextId, 'secret'));
+            return ['client' => $client, 'secret' => $secret, 'testMode' => $testMode];
+        }
+        return [];
+    }
+
+    /**
+     * Whether a gateway has the credentials it needs to operate. Gateways with
+     * no adapter (e.g. Manual Payment) are considered configured (they handle
+     * their own setup downstream).
+     */
+    public function gatewayIsConfigured(string $gatewayId, int $contextId): bool
+    {
+        $normalized = strtolower($this->normalizeGatewayId($gatewayId));
+        if (!in_array($normalized, ['paystack', 'paystackplugin', 'flutterwave', 'flutterwaveplugin', 'paypalpayment', 'paypal'], true)) {
+            return true;
+        }
+        $creds = $this->resolveGatewayCredentials($gatewayId, $contextId);
+        if (empty($creds)) {
+            return false;
+        }
+        if (isset($creds['client'])) {
+            return trim((string) $creds['client']) !== '' && trim((string) $creds['secret']) !== '';
+        }
+        return trim((string) ($creds['public'] ?? '')) !== '' && trim((string) ($creds['secret'] ?? '')) !== '';
+    }
+
     protected function getAdapter($gatewayName, $contextId)
     {
         require_once(dirname(__FILE__) . '/classes/GatewayAdapterInterface.php');
         require_once(dirname(__FILE__) . '/classes/HttpClient.php');
+        require_once(dirname(__FILE__) . '/classes/Money.php');
 
         $gatewayName = strtolower($this->normalizeGatewayId((string) $gatewayName));
+        $creds = $this->resolveGatewayCredentials($gatewayName, $contextId);
 
         if (in_array($gatewayName, ['paystack', 'paystackplugin'], true)) {
             require_once(dirname(__FILE__) . '/classes/PaystackAdapter.php');
-            $paystackPlugin = $this->getPaymethodPlugin('paystackplugin');
-            $testMode = $paystackPlugin ? (bool) $paystackPlugin->getSetting($contextId, 'testMode') : false;
-            $fallbackPublic = $paystackPlugin ? (string) $paystackPlugin->getSetting($contextId, $testMode ? 'testPublicKey' : 'livePublicKey') : '';
-            $fallbackSecret = $paystackPlugin ? (string) $paystackPlugin->getSetting($contextId, $testMode ? 'testSecretKey' : 'liveSecretKey') : '';
             return new \APP\plugins\paymethod\multipay\classes\PaystackAdapter(
-                (string) ($this->getSetting($contextId, 'paystackPublicKey') ?: $fallbackPublic),
-                (string) ($this->getSetting($contextId, 'paystackSecretKey') ?: $fallbackSecret),
+                (string) ($creds['public'] ?? ''),
+                (string) ($creds['secret'] ?? ''),
                 new \APP\plugins\paymethod\multipay\classes\HttpClient()
             );
         } elseif (in_array($gatewayName, ['flutterwave', 'flutterwaveplugin'], true)) {
             require_once(dirname(__FILE__) . '/classes/FlutterwaveAdapter.php');
-            $flutterwavePlugin = $this->getPaymethodPlugin('flutterwaveplugin');
-            $testMode = $flutterwavePlugin ? (bool) $flutterwavePlugin->getSetting($contextId, 'testMode') : false;
-            $fallbackPublic = $flutterwavePlugin ? (string) $flutterwavePlugin->getSetting($contextId, $testMode ? 'testPublicKey' : 'livePublicKey') : '';
-            $fallbackSecret = $flutterwavePlugin ? (string) $flutterwavePlugin->getSetting($contextId, $testMode ? 'testSecretKey' : 'liveSecretKey') : '';
-            $fallbackWebhook = $flutterwavePlugin ? (string) $flutterwavePlugin->getSetting($contextId, 'webhookHash') : '';
             return new \APP\plugins\paymethod\multipay\classes\FlutterwaveAdapter(
-                (string) ($this->getSetting($contextId, 'flutterwavePublicKey') ?: $fallbackPublic),
-                (string) ($this->getSetting($contextId, 'flutterwaveSecretKey') ?: $fallbackSecret),
-                (string) ($this->getSetting($contextId, 'flutterwaveWebhookSecret') ?: $fallbackWebhook),
+                (string) ($creds['public'] ?? ''),
+                (string) ($creds['secret'] ?? ''),
+                (string) ($creds['webhook'] ?? ''),
                 new \APP\plugins\paymethod\multipay\classes\HttpClient()
             );
         } elseif (in_array($gatewayName, ['paypalpayment', 'paypal'], true)) {
-            require_once(dirname(__FILE__) . '/classes/PaypalAdapter.php');
-            $paypalPlugin = $this->getPaymethodPlugin('paypalpayment');
-            if (!$paypalPlugin) {
+            if (empty($creds)) {
                 return null;
             }
+            require_once(dirname(__FILE__) . '/classes/PaypalAdapter.php');
             return new \APP\plugins\paymethod\multipay\classes\PaypalAdapter(
-                (string) $paypalPlugin->getSetting($contextId, 'clientId'),
-                (string) $paypalPlugin->getSetting($contextId, 'secret'),
-                (bool) $paypalPlugin->getSetting($contextId, 'testMode')
+                (string) ($creds['client'] ?? ''),
+                (string) ($creds['secret'] ?? ''),
+                (bool) ($creds['testMode'] ?? false)
             );
         }
         return null;
+    }
+
+    /**
+     * Whether display-only FX conversion is enabled for a context.
+     */
+    public function isFxEnabled(int $contextId): bool
+    {
+        $val = $this->getSetting($contextId, 'fxEnabled');
+        return $val === null ? true : (bool) $val;
+    }
+
+    /**
+     * Build a configured ExchangeRateService for a context, or null if FX is off.
+     */
+    public function buildExchangeRateService(int $contextId)
+    {
+        if (!$this->isFxEnabled($contextId)) {
+            return null;
+        }
+        require_once(dirname(__FILE__) . '/classes/HttpClient.php');
+        require_once(dirname(__FILE__) . '/classes/Money.php');
+        require_once(dirname(__FILE__) . '/classes/services/fx/RateProvider.php');
+        require_once(dirname(__FILE__) . '/classes/services/fx/YahooRateProvider.php');
+        require_once(dirname(__FILE__) . '/classes/services/fx/ConfigurableRateProvider.php');
+        require_once(dirname(__FILE__) . '/classes/services/ExchangeRateService.php');
+
+        $providerId = (string) ($this->getSetting($contextId, 'fxProvider') ?: 'yahoo');
+        if ($providerId === 'custom') {
+            $provider = new \APP\plugins\paymethod\multipay\classes\services\fx\ConfigurableRateProvider(
+                (string) $this->getSetting($contextId, 'fxProviderUrl'),
+                (string) $this->getSetting($contextId, 'fxProviderKey'),
+                (string) ($this->getSetting($contextId, 'fxRatePath') ?: 'rate')
+            );
+        } else {
+            $provider = new \APP\plugins\paymethod\multipay\classes\services\fx\YahooRateProvider();
+        }
+
+        $markup = (float) ($this->getSetting($contextId, 'fxMarkupPercent') ?: 0);
+        $ttl = (int) ($this->getSetting($contextId, 'fxCacheTtl') ?: 43200);
+        return new \APP\plugins\paymethod\multipay\classes\services\ExchangeRateService($provider, $markup, $ttl);
     }
 
     protected function getInstalledGatewayOptions(): array
@@ -859,6 +1415,50 @@ class MultipayPlugin extends PaymethodPlugin
             return strcmp((string) $a['label'], (string) $b['label']);
         });
         return $options;
+    }
+
+    /**
+     * Installed gateways that expose a MultiPay adapter, with the ISO-4217
+     * currencies each can settle. Drives the per-gateway currency checkbox
+     * matrix in settings and the eligibility filter.
+     *
+     * @return array<int,array{id:string,label:string,currencies:string[]}>
+     */
+    public function getAdapterBackedGateways(int $contextId): array
+    {
+        $out = [];
+        foreach ($this->getInstalledGatewayOptions() as $option) {
+            $adapter = $this->getAdapter($option['value'], $contextId);
+            if (!$adapter) {
+                continue;
+            }
+            $out[] = [
+                'id' => $option['value'],
+                'label' => $option['label'],
+                'currencies' => $adapter->getSupportedCurrencies(),
+            ];
+        }
+        return $out;
+    }
+
+    /**
+     * The currencies staff have ticked for a gateway. Defaults to every
+     * supported currency when no selection has been saved yet; an explicit
+     * empty selection is honoured (gateway accepts nothing).
+     *
+     * @param string[] $supported
+     * @return string[]
+     */
+    public function getSelectedCurrencies(int $contextId, string $gatewayId, array $supported): array
+    {
+        $stored = $this->getSetting($contextId, 'currencies_' . $gatewayId);
+        if (!is_array($stored)) {
+            return $supported;
+        }
+        return array_values(array_intersect(
+            array_map('strtoupper', $stored),
+            array_map('strtoupper', $supported)
+        ));
     }
 
     protected function gatewaySupportsRefunds(string $gatewayName, int $contextId): bool

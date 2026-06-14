@@ -2,6 +2,85 @@
 
 Versioning: `A.B.C.D` — A new feature · B new sub-feature · C major fix · D minor fix.
 
+## 1.1.0.1 - 2026-06-14
+
+Hardening + audit fixes (minor fixes).
+
+### Added
+- **Per-gateway webhook URL** shown in settings, to paste into each gateway's
+  dashboard. Without it, dispute alerts and asynchronous refund confirmation
+  never fire — this was previously undiscoverable.
+
+### Fixed
+- **Inline credentials are now Test/Live aware**, selected by the Test Mode
+  toggle. Previously a single key pair was used regardless of mode, so toggling
+  Test Mode did nothing — risking live charges in test or failures in production.
+- **Payment-manager list computes status in SQL**, so status filtering, totals
+  and pagination stay consistent (status was filtered *after* pagination,
+  producing wrong counts and short pages); the per-row N+1 queries are gone.
+- **Numeric settings clamped on save:** amountTolerance [0–1000],
+  fxMarkupPercent [-100–100], fxCacheTtl [60–604800] seconds.
+- **Secrets are write-only** — never echoed back to the browser; a blank field
+  keeps the stored value.
+- **Refund derives money-moving fields server-side** from the payment id
+  (gateway/reference/provider-tx-id/currency are no longer trusted from the
+  client); partial amount is capped at the captured amount.
+- **Empty "enabled gateways" is honoured** (no silent re-enable of every
+  installed gateway).
+- **Unconfigured gateways are hidden** at checkout instead of failing at
+  initiation.
+- `geoCountryCurrencyMap` is only stored when it is valid JSON.
+- **Resend receipt emails the rendered receipt template** (was a plaintext
+  summary).
+- **Paystack adapter currency set now includes `XOF`**, matching the Paystack
+  plugin's declared currencies.
+
+### Changed
+- Removed the dead `logLevel` setting (was stored but never read).
+- The per-gateway currency matrix now shows only **enabled** gateways.
+- Fresh-install schema uses `decimal(14,4)` for amount columns.
+
+### Notes
+- **Flutterwave API version.** MultiPay's Flutterwave adapter targets API **v3**
+  (Bearer secret key). The standalone Flutterwave plugin uses **v4** (OAuth
+  client id/secret; settings `v4TestClientId`/`v4TestClientSecret`/
+  `v4LiveClientId`/`v4LiveClientSecret`). To orchestrate Flutterwave through
+  MultiPay, enter a v3-compatible public/secret key inline in MultiPay's
+  credentials — sibling-key auto-fill does not cross the v3/v4 boundary. A v4
+  adapter for MultiPay is tracked as a follow-up.
+
+## 1.1.0.0 - 2026-06-14
+
+Feature release (new sub-features).
+
+### Added
+- **Redesigned checkout page** — segmented gateway selector + sticky order
+  summary, styled to match the journal theme.
+- **Currency / location detection** with an advisory "best gateway" notice
+  (OJS profile country → Cloudflare `CF-IPCountry` → `Accept-Language`).
+- **Display-only currency conversion.** Shows the payer an estimate in their
+  local currency with a toggle and disclaimer; the gateway is always charged the
+  journal currency/amount. Pluggable rate provider (Yahoo Finance default +
+  configurable custom endpoint), signed markup, cached with TTL, hides
+  gracefully on any fetch failure.
+- **Per-gateway currency checkbox matrix** replacing the free-text allowed-
+  currencies box and the routing JSON; allowed currencies and default routing
+  are derived from the ticked selection.
+- **Inline gateway credentials** managed from the MultiPay settings group;
+  sibling gateway groups are merged in when MultiPay is active (the native
+  payment-plugin selector and Manual Payment stay visible so staff can revert).
+- **Multi-currency display formatting** (ISO-4217 minor units; intl with a
+  symbol fallback) via a shared `Money` helper.
+- **Payment manager** hooked into the core `/payments` page — filter / search /
+  pagination, refunds, dispute record/resolve, and receipt view/resend with a
+  themed printable receipt.
+- **Dispute auto-flagging and asynchronous refund confirmation** via signed
+  gateway webhooks; new `multipay_exchange_rates` and `multipay_disputes` tables.
+
+### Fixed
+- Single-gateway checkout CSRF bug (always render the POST form with a token).
+- Refund replay / over-refund guard (idempotency key + captured-amount cap).
+
 ## 1.0.2.0 - 2026-06-11
 
 Major fix.

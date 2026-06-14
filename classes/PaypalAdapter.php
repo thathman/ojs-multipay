@@ -150,6 +150,11 @@ class PaypalAdapter implements GatewayAdapterInterface
         return false;
     }
 
+    public function getSupportedCurrencies(): array
+    {
+        return self::SUPPORTED_CURRENCIES;
+    }
+
     /** Format an amount for PayPal: no decimals for zero-decimal currencies. */
     private function formatAmount(float $amount, string $currency): string
     {

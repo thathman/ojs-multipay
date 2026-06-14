@@ -45,34 +45,68 @@ class MultiPayPaymentForm extends Form
     public function display($request = null, $template = null)
     {
         $journal = $request->getJournal();
-        $enabledGatewayChoices = $this->plugin->getEnabledGatewayChoices((int) $journal->getId());
+        $contextId = (int) $journal->getId();
+        $amount = (float) $this->queuedPayment->getAmount();
         $currency = strtoupper($this->queuedPayment->getCurrencyCode());
 
-        if (empty($enabledGatewayChoices)) {
-            $templateMgr = TemplateManager::getManager($request);
+        // Only gateways that can settle the JOURNAL currency are selectable —
+        // MultiPay always charges the journal currency/amount.
+        $gatewayChoices = $this->plugin->getEligibleGatewayChoices($contextId, $currency);
+
+        $templateMgr = TemplateManager::getManager($request);
+
+        if (empty($gatewayChoices)) {
             $templateMgr->assign('message', 'plugins.paymethod.multipay.error.noGateways');
             $templateMgr->display('frontend/pages/message.tpl');
             return;
         }
 
-        if (count($enabledGatewayChoices) > 1) {
-            $templateMgr = TemplateManager::getManager($request);
-            $templateMgr->assign([
-                'gateways' => $enabledGatewayChoices,
-                'queuedPaymentId' => $this->queuedPayment->getId(),
-                'pluginName' => $this->plugin->getName(),
-                'amount' => $this->queuedPayment->getAmount(),
-                'currency' => $currency,
-                'initiateUrl' => $request->url(null, 'payment', 'plugin', [$this->plugin->getName(), 'initiate']),
-            ]);
-            $templateMgr->display($this->plugin->getTemplateResource('paymentSelection.tpl'));
-        } else {
-            $gateway = reset($enabledGatewayChoices);
-            $gatewayKey = is_array($gateway) ? ($gateway['id'] ?? '') : (string) $gateway;
-            $request->redirectUrl($request->url(null, 'payment', 'plugin', [$this->plugin->getName(), 'initiate'], [
-                'queuedPaymentId' => $this->queuedPayment->getId(),
-                'gateway' => $gatewayKey,
-            ]));
+        // Best-gateway suggestion (advisory notice).
+        $suggestion = null;
+        if ((bool) ($this->plugin->getSetting($contextId, 'suggestGatewayNotice') ?? true)) {
+            $suggestion = $this->plugin->suggestGateway($request, $contextId, $gatewayChoices);
         }
+
+        // Display-only FX estimate in the payer's local currency, if detectable.
+        $fx = null;
+        $service = $this->plugin->buildExchangeRateService($contextId);
+        if ($service) {
+            require_once(dirname(__FILE__) . '/classes/services/LocaleCurrencyService.php');
+            $localeCurrency = new \APP\plugins\paymethod\multipay\classes\services\LocaleCurrencyService(
+                (string) $this->plugin->getSetting($contextId, 'geoCountryCurrencyMap')
+            );
+            $localCurrency = $localeCurrency->detectCurrency($request);
+            if ($localCurrency !== '' && $localCurrency !== $currency) {
+                $converted = $service->convertForDisplay($amount, $currency, $localCurrency);
+                if ($converted) {
+                    $fx = [
+                        'localCurrency' => $localCurrency,
+                        'localFormatted' => $converted['formatted'],
+                        'disclaimer' => (string) ($this->plugin->getSetting($contextId, 'fxDisclaimer')
+                            ?: __('plugins.paymethod.multipay.checkout.fxDisclaimer.default')),
+                    ];
+                }
+            }
+        }
+
+        require_once(dirname(__FILE__) . '/classes/Money.php');
+        $journalFormatted = \APP\plugins\paymethod\multipay\classes\Money::format($amount, $currency);
+
+        // Always render the POST selection form (with {csrf}), even for a single
+        // gateway. The previous single-gateway shortcut issued a GET redirect to
+        // ?op=initiate with no csrfToken, which handleInitiate()'s checkCSRF()
+        // then rejected (bug B1).
+        $templateMgr->assign([
+            'gateways' => $gatewayChoices,
+            'queuedPaymentId' => $this->queuedPayment->getId(),
+            'pluginName' => $this->plugin->getName(),
+            'amount' => $amount,
+            'currency' => $currency,
+            'journalFormatted' => $journalFormatted,
+            'suggestion' => $suggestion,
+            'fx' => $fx,
+            'initiateUrl' => $request->url(null, 'payment', 'plugin', [$this->plugin->getName(), 'initiate']),
+        ]);
+        $templateMgr->display($this->plugin->getTemplateResource('paymentSelection.tpl'));
     }
 }

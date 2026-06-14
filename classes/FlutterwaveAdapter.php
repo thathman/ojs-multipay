@@ -133,4 +133,9 @@ class FlutterwaveAdapter implements GatewayAdapterInterface
     {
         return true;
     }
+
+    public function getSupportedCurrencies(): array
+    {
+        return $this->supportedCurrencies;
+    }
 }

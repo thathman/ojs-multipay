@@ -1,92 +1,135 @@
 # MultiPay Payment Plugin for OJS
 
-MultiPay is a multi-gateway payment orchestration plugin for Open Journal
+MultiPay is a multi-gateway payment **orchestration** plugin for Open Journal
 Systems (OJS). It accepts the journal's existing fee in its configured currency
-and **routes** each payment to the most appropriate gateway (Paystack,
-Flutterwave, PayPal, …) based on currency and a configurable routing map.
-
-> **Scope note:** MultiPay routes payments by currency; it does **not** convert
-> between currencies. Live currency conversion (rate lookup, user currency
-> selection, converted-amount storage) is a separate, planned capability and is
-> not part of this release.
+and routes each payment to the most appropriate gateway (Paystack, Flutterwave,
+PayPal\*, Manual, and any other installed paymethod plugin), with a redesigned
+checkout, location-aware gateway suggestions, display-only currency conversion,
+and a full payment-management console hooked into the core `/payments` page.
 
 - **Compatibility:** OJS 3.5.0.0 – 3.5.0.3
 - **Licence:** GNU GPL v3 (see `LICENSE`)
 - **Type:** `plugins.paymethod`
+- **Version:** 1.1.0.1
 
 ## Maintainer
 - Name: Hendrix Nwaokolo
 - Organisation: Airix Media
 - Website: https://ojs.airixmedia.com
 
-## License
-This plugin is distributed under the **GNU GPL v3** (the same license already used in OJS plugin headers).  
-GPLv3 requires preserving copyright/license notices and marking modifications, and it allows commercial distribution, sponsorship/donations, and paid/pro service tiers.
+## How charging works (important)
+MultiPay **always charges the journal's currency and amount**. It does **not**
+convert the charged amount. The optional currency conversion is **display-only**:
+the payer is shown an estimate in their local currency purely for information,
+with a toggle back to the journal currency and a disclaimer. The gateway (and the
+payer's bank) performs any real conversion at its own rate.
 
 ## Features
-- Supports multiple installed payment plugins (Paystack, Flutterwave, PayPal*, Manual, and future compatible gateways).
-- Deterministic currency-based routing with fallback gateway.
-- Unified gateway orchestration settings with gateway tab selector.
-- Unified payment selection page for users.
-- Strict callback verification and idempotent webhook processing.
-- Refunds, reconciliation, and recurring diagnostics views (manager/admin only).
 
-\* **PayPal is experimental** — it uses the Omnipay PayPal_Rest (v1) driver;
-asynchronous webhooks are rejected and refunds are unsupported. Keep it disabled
-in production until it is migrated to PayPal Orders v2.
+### Checkout
+- Redesigned checkout page: a segmented gateway selector and a sticky order
+  summary, styled to match the journal theme.
+- Only gateways that can **settle the journal currency** are offered; a gateway
+  that can't (or isn't configured) is hidden rather than failing mid-payment.
+- Advisory **"best gateway" notice** based on the payer's detected location
+  (OJS profile country → Cloudflare `CF-IPCountry` → `Accept-Language`).
+- **Display-only currency estimate** in the payer's local currency with a
+  show-in/show-back toggle and a clear disclaimer. Pluggable rate provider
+  (Yahoo Finance by default, or a configurable custom endpoint), an optional
+  signed markup %, and a cache TTL. Hides gracefully if a rate can't be fetched.
 
-## Security
-- The management console (transactions, refunds, settlement reports, recurring
-  profiles) requires a **journal manager or site administrator**; other users
-  receive a 404.
-- Gateway callbacks and webhooks are signature-verified and amount/currency are
-  re-validated against the queued payment before fulfilment.
-- Webhook deliveries are de-duplicated idempotently; a transient database error
-  causes a retryable failure rather than a silently dropped payment.
+### Configuration
+- **Per-gateway currency matrix.** For each enabled, adapter-backed gateway you
+  tick the currencies it should accept (only currencies the gateway can settle
+  are listed). The union becomes the allowed-currency set and a default
+  currency→gateway route is derived automatically — no free-text currency box or
+  routing JSON to hand-maintain.
+- **Inline credentials, Test + Live.** Manage every gateway's keys from the one
+  MultiPay group. The **Test Mode** toggle selects whether the Test or Live keys
+  are used. Secret fields are **write-only** (shown blank; enter a value only to
+  change it). Blank fields fall back to that gateway plugin's own configured keys.
+- **Webhook URL per gateway** is shown for you to paste into the gateway
+  dashboard — required for dispute alerts and asynchronous refund confirmation.
+- **Fallback gateway** chooser, amount-tolerance, and FX/geo options, each with
+  sensible defaults.
+- When MultiPay is the active payment plugin, the sibling gateway settings groups
+  (Paystack / Flutterwave / PayPal) are merged into MultiPay to avoid duplicate
+  configuration. The native payment-plugin selector and Manual Payment stay
+  visible, so you can revert to a single gateway at any time.
+
+### Payment management (`/payments`)
+The plugin's companion **paymethodSupport** generic plugin adds a *Payment
+manager* tab to the core Payments page with:
+- Filter (gateway / status / type / date range), text search, and pagination.
+- Per-payment **refund** (asynchronous: request → pending → webhook-confirmed,
+  idempotent, capped at the captured amount).
+- **Dispute** record/resolve with staff notes and history.
+- **Receipt** view and **resend** using a themed printable receipt template.
+
+### Integrity & security
+- Gateway callbacks and webhooks are **signature-verified**; amount and currency
+  are re-validated against the queued payment before fulfilment.
+- Webhook/callback deliveries are **idempotent**; a transient DB error is a
+  retryable failure rather than a silently dropped payment.
+- **Disputes and refunds are webhook-driven** and pass the same signature gate.
+- Refund actions derive the gateway/reference/provider-tx-id/currency
+  **server-side** from the payment id; nothing money-moving is trusted from the
+  client.
+- The legacy management console (transactions, webhooks, routing preview,
+  reconciliation, recurring) requires a **journal manager or site administrator**.
+
+\* **PayPal is experimental** — Omnipay PayPal_Rest (v1) driver; asynchronous
+webhooks are rejected and refunds are unsupported. Keep it disabled in production
+until it is migrated to PayPal Orders v2.
+
+## Gateway integration notes
+MultiPay auto-detects every installed paymethod plugin. For the gateways it has
+native adapters for, it reads the sibling plugin's keys as a fallback:
+
+| Gateway | API | Credential settings MultiPay reads (fallback) | Supported currencies |
+|---|---|---|---|
+| **Paystack** | v1 (Bearer secret) | `testPublicKey`, `testSecretKey`, `livePublicKey`, `liveSecretKey` | NGN, USD, GHS, ZAR, KES, XOF |
+| **Flutterwave** | adapter targets **v3** (Bearer secret) | `webhookHash` (webhook). See note below. | NGN, USD, EUR, GBP, GHS, KES, ZAR, XAF, XOF, UGX, RWF, TZS, EGP, MWK |
+| **PayPal** (experimental) | Omnipay PayPal_Rest v1 | `clientId`, `secret`, `testMode` | major PayPal currencies |
+| **Manual / others** | delegated | n/a (handled by the plugin's own form) | gateway-defined |
+
+> **Flutterwave v3/v4 note.** MultiPay's Flutterwave adapter currently targets
+> Flutterwave **API v3** (Bearer secret key). The standalone Flutterwave plugin
+> has moved to **v4** (OAuth client id/secret; settings `v4TestClientId`,
+> `v4TestClientSecret`, `v4LiveClientId`, `v4LiveClientSecret`). Because the key
+> *types* differ, MultiPay cannot auto-fill Flutterwave keys from the v4 plugin.
+> To orchestrate Flutterwave through MultiPay today, enter a v3-compatible
+> public/secret key inline in MultiPay's credentials. A v4 adapter is a tracked
+> follow-up.
 
 ## Installation
-1. Upload the plugin tarball via the Plugin Gallery or extract it to `plugins/paymethod/multipay`.
-2. Enable the plugin in Website Settings -> Plugins -> Payment Methods.
-3. Configure the settings (API keys, enabled gateways).
-
-## Configuration
-- **Enabled Gateways**: Select which gateways to offer.
-- **API Keys**: Enter Public/Secret keys for each enabled gateway.
-- **Allowed Currencies**: (Optional) Restrict currencies.
-- **Currency Routing JSON**: Configure default gateway per currency.
-- **Fallback Gateway**: Define fallback when currency map has no match.
-- **Amount Tolerance**: Configure amount verification threshold.
-
-## Manage Views
-- Transactions
-- Webhooks
-- Routing Preview
-- Refunds
-- Reconciliation
-- Recurring
+1. Upload via the Plugin Gallery or extract to `plugins/paymethod/multipay`.
+2. Enable in **Settings → Distribution → Payments** and choose **MultiPay** as
+   the payment plugin.
+3. Enable gateways, enter their Test/Live keys, tick supported currencies, and
+   paste each gateway's webhook URL into its dashboard.
+4. Install the companion **paymethodSupport** plugin to enable the `/payments`
+   manager tab and receipts.
 
 ## Tests
-Run:
 ```bash
 php plugins/paymethod/multipay/tests/run.php
 ```
 
 ## Development
-- The plugin uses a `GatewayAdapterInterface` to allow easy addition of new gateways.
-- Database tables for transactions, webhook logs, idempotency, refunds, reconciliation jobs, recurring profiles, and settlement reports are created on install.
+- New gateways implement `classes/GatewayAdapterInterface` (initiate, verify,
+  webhook validate/normalize, refund, `supportsCurrency`, `getSupportedCurrencies`).
+- Shared `classes/Money.php` is the single source of truth for ISO-4217 minor
+  units and display formatting.
+- Install migration creates the transaction, webhook-log, idempotency, refunds,
+  reconciliation, recurring, settlement, exchange-rate, and disputes tables.
 
-## Releasing / packaging (for distribution)
-
+## Releasing / packaging
 Following the [PKP plugin release guide](https://docs.pkp.sfu.ca/dev/plugin-guide/en/release):
-
-1. Bump `<release>` and `<date>` in `version.xml`, update `CHANGELOG.md`.
-2. Tag the commit (e.g. `git tag v1.0.1.0 && git push --tags`).
+1. Bump `<release>` and `<date>` in `version.xml`; update `CHANGELOG.md`.
+2. Tag the commit (e.g. `git tag v1.1.0.1 && git push --tags`).
 3. Build the archive with the plugin folder at the top level:
    ```
-   tar -czf multipay-1.0.1.0.tar.gz --exclude-vcs --exclude='*.tar.gz' multipay/
+   tar -czf multipay-1.1.0.1.tar.gz --exclude-vcs --exclude='*.tar.gz' multipay/
    ```
 4. Attach the archive to the GitHub release for the tag.
-5. (Optional) Submit to the OJS Plugin Gallery per the PKP guide.
-
-The archive must contain a single top-level `multipay/` directory so OJS's
-**Upload A New Plugin** installer places it correctly.

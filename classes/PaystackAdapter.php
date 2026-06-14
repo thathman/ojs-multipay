@@ -16,16 +16,11 @@ namespace APP\plugins\paymethod\multipay\classes;
 
 class PaystackAdapter implements GatewayAdapterInterface
 {
-    /** ISO-4217 currencies with no minor unit (exponent 0). */
-    private const ZERO_DECIMAL = ['BIF', 'CLP', 'DJF', 'GNF', 'JPY', 'KMF', 'KRW', 'PYG', 'RWF', 'UGX', 'VND', 'VUV', 'XAF', 'XOF', 'XPF'];
-    /** ISO-4217 currencies with three minor digits (exponent 3). */
-    private const THREE_DECIMAL = ['BHD', 'IQD', 'JOD', 'KWD', 'LYD', 'OMR', 'TND'];
-
     protected string $publicKey;
     protected string $secretKey;
     protected HttpClient $httpClient;
     protected string $baseUrl = 'https://api.paystack.co';
-    protected array $supportedCurrencies = ['NGN', 'USD', 'GHS', 'ZAR', 'KES'];
+    protected array $supportedCurrencies = ['NGN', 'USD', 'GHS', 'ZAR', 'KES', 'XOF'];
 
     public function __construct(string $publicKey, string $secretKey, ?HttpClient $httpClient = null)
     {
@@ -132,34 +127,20 @@ class PaystackAdapter implements GatewayAdapterInterface
         return true;
     }
 
-    /**
-     * Multiplier from major units to the gateway's smallest unit for a currency.
-     * 1 for zero-decimal (JPY, KRW…), 1000 for three-decimal (KWD, BHD…),
-     * 100 otherwise. All of Paystack's currently supported currencies are
-     * two-decimal, so this returns 100 for them; the table keeps the adapter
-     * correct if the supported set ever widens.
-     */
-    private function minorUnitFactor(string $currency): int
+    public function getSupportedCurrencies(): array
     {
-        $c = strtoupper($currency);
-        if (in_array($c, self::ZERO_DECIMAL, true)) {
-            return 1;
-        }
-        if (in_array($c, self::THREE_DECIMAL, true)) {
-            return 1000;
-        }
-        return 100;
+        return $this->supportedCurrencies;
     }
 
     /** Convert a major-unit amount to the gateway's smallest integer unit. */
     private function toMinorUnits(float $amount, string $currency): int
     {
-        return (int) round($amount * $this->minorUnitFactor($currency));
+        return Money::toMinorUnits($amount, $currency);
     }
 
     /** Convert a smallest-unit amount back to major units. */
     private function fromMinorUnits($amount, string $currency): float
     {
-        return (float) $amount / $this->minorUnitFactor($currency);
+        return Money::fromMinorUnits($amount, $currency);
     }
 }

@@ -13,6 +13,7 @@
 
 require_once dirname(__DIR__) . '/classes/GatewayAdapterInterface.php';
 require_once dirname(__DIR__) . '/classes/HttpClient.php';
+require_once dirname(__DIR__) . '/classes/Money.php';
 require_once dirname(__DIR__) . '/classes/PaystackAdapter.php';
 
 use APP\plugins\paymethod\multipay\classes\HttpClient;

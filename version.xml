@@ -13,10 +13,10 @@
 <version>
 	<application>multipay</application>
 	<type>plugins.paymethod</type>
-	<release>1.0.2.0</release>
-	<date>2026-06-11</date>
+	<release>1.1.0.1</release>
+	<date>2026-06-14</date>
 	<lazy-load>0</lazy-load>
-	<class>APP\plugins\paymethod\multipay\MultipayPlugin</class>
+	<class>APP\plugins\paymethod\multipay\MultiPayPlugin</class>
 	<compatibility application="ojs2">
 		<version>3.5.0.0</version>
 		<version>3.5.0.1</version>

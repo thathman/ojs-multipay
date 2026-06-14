@@ -32,17 +32,11 @@ msgstr "Payment Plugin Mode"
 msgid "plugins.paymethod.multipay.settings.pluginMode.value"
 msgstr "MultiPay is active as the journal payment orchestrator."
 
-msgid "plugins.paymethod.multipay.settings.gatewayTabs"
-msgstr "Gateway Tabs"
+msgid "plugins.paymethod.multipay.settings.gatewayCurrencies"
+msgstr "Supported Currencies per Gateway"
 
-msgid "plugins.paymethod.multipay.settings.gatewayTabs.description"
-msgstr "Use this tab selector to view each gateway context while managing one unified multi-gateway payment setup."
-
-msgid "plugins.paymethod.multipay.settings.gatewayMode.active"
-msgstr "currently active plugin mode"
-
-msgid "plugins.paymethod.multipay.settings.gatewayMode.available"
-msgstr "available through MultiPay orchestration"
+msgid "plugins.paymethod.multipay.settings.gatewayCurrencies.description"
+msgstr "For each gateway, tick the currencies it should accept. Only currencies the gateway can actually settle are listed. The journal currency must be ticked for a gateway to appear at checkout."
 
 msgid "plugins.paymethod.multipay.settings.paystackPublicKey"
 msgstr "Paystack Public Key"
@@ -68,20 +62,23 @@ msgstr "Map currency code to default gateway, e.g. {\"NGN\":\"paystack\",\"USD\"
 msgid "plugins.paymethod.multipay.settings.fallbackGateway"
 msgstr "Fallback Gateway"
 
-msgid "plugins.paymethod.multipay.settings.logLevel"
-msgstr "Log Level"
+msgid "plugins.paymethod.multipay.settings.fallbackGateway.description"
+msgstr "Gateway used when no other rule selects one for the journal currency."
+
+msgid "plugins.paymethod.multipay.settings.fallbackGateway.none"
+msgstr "— None —"
+
+msgid "plugins.paymethod.multipay.settings.paypalClientId"
+msgstr "PayPal Client ID"
+
+msgid "plugins.paymethod.multipay.settings.paypalSecret"
+msgstr "PayPal Secret"
 
 msgid "plugins.paymethod.multipay.settings.amountTolerance"
 msgstr "Amount Tolerance"
 
 msgid "plugins.paymethod.multipay.settings.callbackUrl"
-msgstr "Callback URL"
-
-msgid "plugins.paymethod.multipay.settings.paystackWebhookUrl"
-msgstr "Paystack Webhook URL"
-
-msgid "plugins.paymethod.multipay.settings.flutterwaveWebhookUrl"
-msgstr "Flutterwave Webhook URL"
+msgstr "Return (callback) URL"
 
 msgid "plugins.paymethod.multipay.paymentSelection"
 msgstr "Select Payment Method"
@@ -172,3 +169,153 @@ msgstr "Count"
 
 msgid "plugins.paymethod.multipay.table.total"
 msgstr "Total"
+
+msgid "plugins.paymethod.multipay.settings.revert"
+msgstr "Revert to a single gateway"
+
+msgid "plugins.paymethod.multipay.settings.revert.description"
+msgstr "To turn MultiPay off, use the Payment plugin selector above and choose a single gateway (e.g. Paystack). MultiPay will stop orchestrating and the chosen gateway behaves normally. Your existing selection is preserved on upgrade."
+
+msgid "plugins.paymethod.multipay.settings.credentials"
+msgstr "Gateway credentials"
+
+msgid "plugins.paymethod.multipay.settings.credentials.description"
+msgstr "Manage each gateway's API keys here. The Test Mode toggle above selects whether the Test or Live keys are used. Secret fields are write-only — they show blank; enter a value only to change it. Leave a field blank to fall back to that gateway plugin's own configured keys."
+
+msgid "plugins.paymethod.multipay.settings.cred.publicTest"
+msgstr "Test public key"
+
+msgid "plugins.paymethod.multipay.settings.cred.secretTest"
+msgstr "Test secret key"
+
+msgid "plugins.paymethod.multipay.settings.cred.publicLive"
+msgstr "Live public key"
+
+msgid "plugins.paymethod.multipay.settings.cred.secretLive"
+msgstr "Live secret key"
+
+msgid "plugins.paymethod.multipay.settings.cred.clientTest"
+msgstr "Test client ID"
+
+msgid "plugins.paymethod.multipay.settings.cred.clientLive"
+msgstr "Live client ID"
+
+msgid "plugins.paymethod.multipay.settings.cred.webhookSecret"
+msgstr "Webhook secret / hash"
+
+msgid "plugins.paymethod.multipay.settings.cred.secretSet"
+msgstr "Configured — leave blank to keep the current value."
+
+msgid "plugins.paymethod.multipay.settings.cred.secretUnset"
+msgstr "Not set."
+
+msgid "plugins.paymethod.multipay.settings.webhookUrl"
+msgstr "Webhook URL"
+
+msgid "plugins.paymethod.multipay.settings.webhookUrl.description"
+msgstr "Paste this URL into the gateway dashboard's webhook settings. Required for dispute alerts and asynchronous refund confirmation."
+
+msgid "plugins.paymethod.multipay.settings.paystackPublicKey"
+msgstr "Paystack public key"
+
+msgid "plugins.paymethod.multipay.settings.paystackSecretKey"
+msgstr "Paystack secret key"
+
+msgid "plugins.paymethod.multipay.settings.flutterwavePublicKey"
+msgstr "Flutterwave public key"
+
+msgid "plugins.paymethod.multipay.settings.flutterwaveSecretKey"
+msgstr "Flutterwave secret key"
+
+msgid "plugins.paymethod.multipay.settings.flutterwaveWebhookSecret"
+msgstr "Flutterwave webhook secret hash"
+
+msgid "plugins.paymethod.multipay.settings.fx"
+msgstr "Currency conversion (display only)"
+
+msgid "plugins.paymethod.multipay.settings.fx.description"
+msgstr "Show payers an estimate in their local currency. This is informational only — the gateway is always charged the journal's currency and amount, and the payer's bank or gateway sets the real exchange rate."
+
+msgid "plugins.paymethod.multipay.settings.fxEnabled"
+msgstr "Show a local-currency estimate at checkout"
+
+msgid "plugins.paymethod.multipay.settings.fxProvider"
+msgstr "Exchange-rate provider"
+
+msgid "plugins.paymethod.multipay.settings.fxProvider.yahoo"
+msgstr "Yahoo Finance (free, no key)"
+
+msgid "plugins.paymethod.multipay.settings.fxProvider.custom"
+msgstr "Custom provider (URL template)"
+
+msgid "plugins.paymethod.multipay.settings.fxProviderUrl"
+msgstr "Custom provider URL"
+
+msgid "plugins.paymethod.multipay.settings.fxProviderUrl.description"
+msgstr "URL template with {BASE}, {QUOTE} and optional {KEY} placeholders. Used only when the provider is set to Custom."
+
+msgid "plugins.paymethod.multipay.settings.fxProviderKey"
+msgstr "Custom provider API key"
+
+msgid "plugins.paymethod.multipay.settings.fxRatePath"
+msgstr "Rate field path"
+
+msgid "plugins.paymethod.multipay.settings.fxMarkupPercent"
+msgstr "Rate markup (%)"
+
+msgid "plugins.paymethod.multipay.settings.fxMarkupPercent.description"
+msgstr "Signed percentage added to the raw rate to reflect the prevailing/effective rate, e.g. 2.5 or -1. Display only."
+
+msgid "plugins.paymethod.multipay.settings.fxCacheTtl"
+msgstr "Rate cache lifetime (seconds)"
+
+msgid "plugins.paymethod.multipay.settings.fxCacheTtl.description"
+msgstr "How long a fetched rate is reused before refreshing. Default 43200 (12 hours)."
+
+msgid "plugins.paymethod.multipay.settings.fxDisclaimer"
+msgstr "Estimate disclaimer text"
+
+msgid "plugins.paymethod.multipay.checkout.fxDisclaimer.default"
+msgstr "Estimate only — you will be charged the amount shown in the journal currency; your bank or payment provider sets the final exchange rate."
+
+msgid "plugins.paymethod.multipay.settings.geo"
+msgstr "Location & gateway suggestion"
+
+msgid "plugins.paymethod.multipay.settings.geo.description"
+msgstr "Detect the payer's likely country/currency (best-effort) to show a local-currency estimate and suggest the most suitable gateway. Detection degrades silently when location signals are unavailable."
+
+msgid "plugins.paymethod.multipay.settings.geoDetectEnabled"
+msgstr "Detect payer location/currency"
+
+msgid "plugins.paymethod.multipay.settings.suggestGatewayNotice"
+msgstr "Show a suggested-gateway notice at checkout"
+
+msgid "plugins.paymethod.multipay.settings.geoCountryCurrencyMap"
+msgstr "Country-to-currency overrides (JSON)"
+
+msgid "plugins.paymethod.multipay.settings.geoCountryCurrencyMap.description"
+msgstr "Optional JSON object mapping ISO country codes to ISO currency codes, e.g. {\"UG\":\"UGX\",\"NG\":\"NGN\"}. Merged over the built-in defaults."
+
+msgid "plugins.paymethod.multipay.checkout.suggestNotice"
+msgstr "Based on your location ({$country}), we suggest {$gateway}, which supports {$currency}."
+
+msgid "plugins.paymethod.multipay.checkout.suggestNotice.noCountry"
+msgstr "We suggest {$gateway}, which supports {$currency}."
+
+msgid "plugins.paymethod.multipay.checkout.hostedNotice"
+msgstr "You'll be securely redirected to the selected provider to complete your payment."
+
+msgid "plugins.paymethod.multipay.checkout.orderSummary"
+msgstr "Order summary"
+
+msgid "plugins.paymethod.multipay.checkout.amount"
+msgstr "Amount"
+
+msgid "plugins.paymethod.multipay.checkout.estimated"
+msgstr "Estimated"
+
+msgid "plugins.paymethod.multipay.checkout.showLocal"
+msgstr "Show in my currency ({$currency})"
+
+msgid "plugins.paymethod.multipay.checkout.showJournal"
+msgstr "Show in journal currency"
